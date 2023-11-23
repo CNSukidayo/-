@@ -218,7 +218,9 @@ konga是管理kong的图形界面,自然要配置当前konga管理哪个kong;所
 ## 2.Kong的基本使用 
 **目录:**  
 2.1 动态负载均衡实现  
-
+2.2 基于Basic Auth&JWT身份认证  
+2.3 kong的限流配置  
+2.4 黑白名单的配置  
 
 
 ### 2.1 动态负载均衡实现  
@@ -270,9 +272,93 @@ server {
 **成功后的效果如下:**  
 ![配置target成功](resource/kong/13.png)  
 
+5.restful风格的好处
+以上配置完全都可以使用restful风格的方式来配置,但或许你会感觉到麻烦?  
+实际上这种图形界面对批量配置并不友好,实际上运维人员并不可能一个一个地去点击配置  
+**<font color="#FF00FF">如果需要批量化的配置,运维编写一个脚本,直接批量发送restful风格的命令即可,而不是使用图形化界面</font>**
 
+6.配置service  
+*提示:之前说过,service可以对应一个upstream也可以对应一个具体的微服务(target);这里需要让service对应一个upstream,自然要先把upstream配置好再配置service*  
+![配置service](resource/kong/14.png)  
+这里面有三个主要的参数:  
+* name:这是当前service的名称
+* host:这是我们指定当前service与哪个upstream进行绑定,这里指定的就是第3步创建的upstream
+* path:<font color="#00FF00">这个路径被用来去请求upstream</font>  
+  待会第7步会配置service对应的route;route是用于做路由匹配的;假设我们请求一个地址为  
+  `http://localhost:8000/api/order/getOrderInfo`  
+  这是一个订单服务的请求,在编写route规则的时候需要配置path(route的path)为/api/order;这样该路由(route)才会映射到当前service,但映射成功之后kong默认会把匹配的路径删除,即请求service时如果service步做配置,service真正收到并转发给upstream的请求是  
+  `http://localhost:8080/getOrderInfo`  
+  而target真正接受的请求实际上就是
+  `http://localhost:8000/api/order/getOrderInfo`  
+  所以现在直接请求会404,为了解决这个问题,在配置service的path加上/api/order  
+  <font color="#FF00FF">访问网关kong时,统一入口是8000;8001端口是kong的管理地址</font>
 
+7.配置route  
+![配置route](resource/kong/16.png)  
+这里配置了路由的名称以及它对应需要的paths  
 
+### 2.2 基于Basic Auth&JWT身份认证
+**介绍:**  
+kong本身提供了非常多的插件,这些插件可以辅助kong完成很多事情  
+![kong的插件](resource/kong/17.png)  
+总体来说插件的类型分为:**<font color="#FFC800">Authentication(身份认证)、Security(安全)、Traffic Control(流量控制)、Serverless(无服务器计算)、Analytics & Monitoring(分析与监控)、Transformations(变换器)、Logging(日志)、Other(其它)</font>**  
+当然kong也支持编写自定义的插件(按照kong插件编写规范进行编写,使用lua脚本语言)  
+kong中插件的粒度分为四种:<font color="#00FF00">全局 > service > 路由 & consumer</font>  
+可以进入到不同的层级来配置对应的插件  
+*提示:这里可能会存在误区;虽然route(路由)是匹配转发到service的,并且route也是配置在service下面的,但多个route可以映射到一个service;所以不同的请求匹配到不同的route,每个route可以配置自已的插件,固然它的粒度就小;而最终都落入到同一个service中,则service的粒度固然就大*  
+
+1.添加route纬度的插件(Basic Auth)  
+点击侧边栏route=>选择2.1节配置的route=>local-product-route=>plugins=>+ Add plugin=>AUTHENTICATION=>basic auth  
+大致效果如下:  
+![配置Basic Auth](resource/kong/18.png)  
+*注意:这里会有一个consumer*  
+
+2.配置consumer  
+**介绍:**  
+什么是consumer,可以理解为能够使用kong中service的用户  
+在刚才配置的插件下,可以看到有consumer这一栏显示的是All consumers  
+![consumer](resource/kong/19.png)  
+表明该认证插件允许所有consumer通过  
+点击侧边栏consumer=>+ create consumer=>username指定为fox  
+
+效果如下:  
+![配置consumer](resource/kong/20.png)
+
+可以在credentials中配置当前消费者的认证信息  
+![消费者](resource/kong/21.png)  
+
+3.Postman进行请求  
+请求的时候进行如下设置即可  
+![postman](resource/kong/22.png)  
+
+4.JWT的配置稍微麻烦一点,但大同小异  
+
+### 2.3 kong的限流配置
+**介绍:**  
+Kong提供了<font color="#00FF00">Rate Limiting</font>插件,实现对请求的**限流**功能,避免过大的请求量过大.  
+Rate Limiting支持秒/分/小时/日/月/年多种**时间维度**的限流,并且可以组合使用;如限制每秒最多100次请求,每分钟最多1000次请求  
+Rate Limiting采用的限流算法是<font color="#00FF00">计数器</font>的方式,所以无法提供类似令牌桶算法的平滑限流能力
+
+Rate Limiting支持三种**基础维度**的限流:  
+* `consumer`:每个消费者允许每秒请求的次数
+* `credential`:
+* `ip`(default):每个IP允许每秒请求的次数  
+
+Rate Limiting支持三种**计数方式**进行存储:  
+- `local`:存储在Nginx本地,实现单实例限流
+- `cluster`(default):存储在Cassandra或PostgreSQL数据库,实现集群限流
+- `redis`:存储在Redis数据库,实现集群限流
+
+1.根据自已需要的粒度添加插件=>TRAFFIC CONTROL=>rate limiting  
+![限流插件](resource/kong/23.png)  
+
+### 2.4 黑白名单的配置
+**解释:**  
+白名单就是运行哪些ip来访问当前服务,黑名单就是不允许哪些ip来访问服务  
+
+1.配置黑白名单插件  
+Add plugin=>SECURITY=>ip restriction  
+![配置黑白名单](resource/kong/24.png)   
 
 
 
