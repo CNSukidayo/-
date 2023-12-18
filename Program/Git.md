@@ -58,6 +58,8 @@
 * `git branch -m [oldBranchName] [newBranchName]`	重命名分支(一切分支m)
 * `git branch [branchName] [hash]`  
   游离状态下创建新分支,当进入游离状态时会提示一个hash值,我们就根据这个hash值去创建分支.
+* `git branch --set-upstream-to=[remoteBranch]`  
+  将当前的本地分支重新关联为远程[remoteBranch]分支
 - - - 
 * `git checkout [-b] [branchName]` 切换到一个分支
   * -b:如果该分支不存在就创建该分支(新分支的版本就是创建新分支的分支的版本)
@@ -106,7 +108,8 @@
 * `git cherry-pick [hash]`  
   将otherBranch分支的<font color="#00FF00">一次提交</font>复制到当前分支(复制的时候不会复制hash值,相当于otherBranch的某次提交的所有操作再执行一次)分支必然都是来自同一节点,所以使用该命令的时候必须从otherBranch和当前节点分开的<font color="#00FF00">第一个commit开始复制</font>(否则会冲突).
 - - - 
-* `git rebase [branch]`  
+* **<font color="#FFC800">git rebase 也叫变基</font>**
+* `git rebase [branch]` 
   将当前分支和branch断开后的所有commit复制到branch.该命令的作用和git cherry-pick类似,只不过当前命令是一次性将两个分支分叉后的<font color="#00FF00">所有commit全部复制一份</font>,另外注意是复制到,所以你要先切换到被复制的那个分支.(复制的时候不会复制hash值),并且该命令只在本机操作不要推送GitHub、branch(想要复制的分支)不能是master(因为master总是要提交到远程)
 * `git reabase --continue`  
   使用git rebase复制的时候同样会产生冲突(有点像merge的冲突,但是这里不能和merge混淆了!!!merge是一次操作而reabase是复制分叉后所有的commit),当解决完冲突后git add -> git reabse --continue
