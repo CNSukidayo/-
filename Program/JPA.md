@@ -11,6 +11,7 @@
 1.1 JPA基本概念介绍  
 1.2 Hibernate上手  
 1.3 切换JPA实现  
+1.4 JPA对象的四种状态  
 
 ### 1.1 JPA基本概念介绍
 1.ORM  
@@ -392,22 +393,55 @@ EntityManager说白了就是JPA规范提供的API,就像Connect一样;<font colo
 
 *提示:如果需要另外的实现,只需要在persistence.xml配置文件中添加一个新的持久化单元,并且在调用createEntityManagerFactory方法的时候指定对应的name即可*  
 
+2.更多的示例  
+```java
+@Test
+public void testR() {
+    EntityManager entityManager = entityManagerFactory.createEntityManager();
+    EntityTransaction transaction = entityManager.getTransaction();
+    transaction.begin();
+    // 懒加载查询
+    Customer customer = entityManager.getReference(Customer.class, 1L);
 
-## 2.Spring Data JPA
-**目录:**  
-2.1 Spring Data JPA中的基本概念  
-2.2 JPA注解(表/属性)  
-2.3 JPA注解(关联)  
+    transaction.commit();
+}
 
-### 2.1 Spring Data JPA中的基本概念  
+```
+<font color="#00FF00">提示:JPA没有单独的更新语句,如果传入的对象有id则会先查询,查询有结果就更新否则就插入,这是JPA的特性</font>  
+
+3.另外,JPA也是支持原生SQL的;如果有业务场景必须使用原生SQL完成,JPA也是支持的  
+
+4.无法删除游离状态的实例  
+```java
+@Test
+public void testD() {
+    EntityManager entityManager = entityManagerFactory.createEntityManager();
+    EntityTransaction transaction = entityManager.getTransaction();
+    transaction.begin();
+    /*
+    无法删除处于游离状态的实例
+    Customer customer = new Customer();
+    customer.setCustomerId(1L);
+    */
+    // 只有从数据库中查出的实例才可以被删除
+    Customer customer = entityManager.find(Customer.class, 1L);
+    entityManager.remove(customer);
+
+    transaction.commit();
+}
+```
+
+### 1.4 JPA对象的四种状态
 1.JPA对象(Entity)的四种状态  
 Entity的生命周期由EntityManager管理,其生命周期在persistence context内  
 
-* 临时状态(New/Transient):刚创建出来,没有与entityManager发生关系,没有被持久化,不处于entityManager中的对象
-* 持久状态(Managed/Persistent):与entityManager发生关系,已经被持久化,可以把持久化状态当作`实实在在的数据库记录`(此状态的属性值修改,将在提交时,同步数据库)
+* 临时状态(New/Transient):刚创建出来,由手动New出来的对象,没有与entityManager发生关系,没有被持久化,不处于entityManager中的对象(不被entityManager管理的对象)
+* 持久状态(Managed/Persistent):与entityManager发生关系,已经被持久化,可以把持久化状态当作`实实在在的数据库记录`(此状态的属性值修改,将在提交时,同步数据库)  
+  <font color="#FF00FF">在持久状态下的任何修改,都将在事务提交之后同步到数据库</font>  
 * 删除状态(Removed):执行remove方法,事务提交之前
 * 游离状态(Detached):游离状态就是提交到数据库后,事务commit后实体的状态.因为事务已经提交了,此时实体的属性的任何改变,`都不会同步到数据库`
 
+<font color="#00FF00">对象状态转换图如下:</font>  
 ![状态](resource/JPA/3.png)
 
 Entity生命周期的四个基本操(CRUD)  
@@ -416,16 +450,31 @@ EntityManager em = factory.createEntityManager();
 
 EntityTransaction tx = em.getTransaction();
 tx.begin();
-
-Customer customer = new Customer(); // 临时状态
-customer.setCustId(6L); // 游离状态
-customer = em.find(Customer.class, 5L); // 持久状态
-em.remove(customer); // 删除状态
+// 临时状态
+Customer customer = new Customer();
+// 游离状态
+customer.setCustId(6L);
+// 持久状态
+customer = em.find(Customer.class, 5L);
+// 删除状态
+em.remove(customer);
 
 tx.commit();
 ```
 
-*注意:这里EntityManager是来源于hibernate中的概念*  
+持久状态:  
+```java
+EntityManager em = factory.createEntityManager();
+
+EntityTransaction tx = em.getTransaction();
+tx.begin();
+// 持久状态
+customer = em.find(Customer.class, 5L);
+customer.setCustomerName("鸡哥");
+
+tx.commit();
+```
+最终的结果是,虽然没有调用merge方法(merge方法是JPA的update效果);但当事务提交之后也会修改数据库中对应的实体的数据  
 
 2.JPA中的持久性上下文  
 * 持久化上下文的生命周期与系统事务一致
@@ -436,6 +485,36 @@ tx.commit();
 在事务提交的时候,JPA会执行一个脏检查机制,会检查持久化上下文中的对象状态和数据库中的状态是否一致,如果不一致,就会根据持久化上下文中的状态去更新数据库中的状态.**但是这个动作只有在数据库事务提交的时候在会做,如果事务回滚了,不会做这个动作**
 
 可以调用JpaRepository提供的flush或saveAndFlush方法立刻同步状态到数据库,而不是等到事务提交的时候在同步.需要注意的是,这里的立刻同步到数据库是指将修改/删除操作所执行的SQL语句先执行,此时事务并没有提交,只有在事务提交后,这个更新/删除才会起作用  
+
+3.hibernate中的缓存  
+hibernate中缓存的概念类似于mybatis中缓存的概念  
+hibernate中有一级缓存和二级缓存  
+* 一级缓存:在同一个EntityManager中查询同一条记录时只会查询一次
+* 二级缓存:不同的EntityManager查询同一条记录也只会查询一次
+
+一级缓存实验:  
+```java
+@Test
+public void testCache() {
+    EntityManager entityManager = entityManagerFactory.createEntityManager();
+    EntityTransaction transaction = entityManager.getTransaction();
+    transaction.begin();
+
+    Customer customer0 = entityManager.find(Customer.class, 1L);
+    Customer customer1 = entityManager.find(Customer.class, 1L);
+
+    transaction.commit();
+}
+```
+通过查看日志发现,这里只会查询一次  
+
+
+
+## 2.Spring Data JPA
+**目录:**  
+2.2 JPA注解(表/属性)  
+2.3 JPA注解(关联)  
+
 
 ### 2.2 JPA注解
 1.Entity命名策略  
