@@ -385,10 +385,12 @@ public class JPATest {
 
 }
 ```
+EntityManager说白了就是JPA规范提供的API,就像Connect一样;<font color="#00FF00">只不过真正的实现是hibernate而已</font>.  
 
 运行代码,查看数据库发现数据已经被插入  
 ![数据](resource/JPA/7.png)  
 
+*提示:如果需要另外的实现,只需要在persistence.xml配置文件中添加一个新的持久化单元,并且在调用createEntityManagerFactory方法的时候指定对应的name即可*  
 
 
 ## 2.Spring Data JPA
