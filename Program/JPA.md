@@ -7,6 +7,12 @@
 
 
 ## 1. JPA基本概念介绍
+**目录:**  
+1.1 JPA基本概念介绍  
+1.2 Hibernate上手  
+1.3 切换JPA实现  
+
+### 1.1 JPA基本概念介绍
 1.ORM  
 ORM全称Object Relation Mapping;用于解决JDBC访问数据库太麻烦的问题,Mybatis、Hibernate就是ORM框架.  
 java针对ORM提出提出了`JPA`,JPA本质上是一种ORM规范,并不是ORM框架,也就是JPA为了实现ORM这一功能制定了规范,其中Hibernate就是JPA的实现,所以Hibernate拥有ORM功能.  
@@ -22,23 +28,32 @@ application、JPA、JPA实现、JDBC和数据库的关系图:
 |         mybatis         |                       hibernate                        |
 |:-----------------------:|:------------------------------------------------------:|
 |   小巧、半自动、直接    |                   方便、全自动、复杂                   |
-| 国内更流行,处理复杂查询 | 优势在简单查询,不太适合太复杂的查询,但符合`微服务`趋势 |
+| 国内更流行,处理复杂查询;在比较复杂的系统进行使用 | 优势在简单查询,不太适合太复杂的查询,但符合`微服务`趋势 |
 
-3.JPA  
+**注意:**  
+实际上mybatis并不能算是ORM框架,<font color="#00FF00">严格来说ORM框架的定义是使用实体类来操作数据库</font>,所以mybatis只是一个半自动的ORM框架  
+
+
+3.JPA&JDBC  
 JPA是Sun在JDK1.5时提出的一种ORM规范,是一种对JDBC的`升级`  
 * 减少对sql语句的依赖,减少基本的开发成本(但也提高了高级的开发成本)
 * 提高数据库的移植性
+  为了提高移植性,<font color="#00FF00">JPA推荐NOSQL</font>也就是不写SQL语句来对数据库进行查询  
+  *注意:这里NOSQL的意思不是非关系型数据库的意思,而是不写SQL的意思;因为SQL是和数据库强绑定的,移植性不好*
 * 进一步明确java对象和数据库类的映射关系
 
 *提示:JPA之于ORM(持久层框架,如MyBatis、Hibernate等,用于管理应用层Object与数据库Data之间的映射)正如JDBC之于数据库驱动(好好理解这句话)*  
 
-规范提供了如下特性:  
+<font color="#00FF00">所以JPA和JDBC是两种用于操作数据库的不同规范</font>,只不过JPA是基于JDBC的;需要依赖JDBC  
+
+JPA规范提供了如下特性:  
 * ORM映射元数据  
   JPA支持XML和注解两种元数据形式,元数据描述对象和表之间的关系,框架据此将实体对象持久化到数据库表中  
   如:`@Entity`、`@Table`、`@Id`、`@Column`等注解
-* JPA提供API可以直接通过操作实体来操作数据库,拜托JDBC、SQL  
-* 通过面向对象而非面向数据库的查询语言查询数据,避免程序的SQL语句紧耦合  
+* JPA提供API可以直接通过操作实体来操作数据库,摆脱JDBC、SQL  
+* 通过面向对象而非面向数据库的查询语言查询数据(HQL),避免程序的SQL语句紧耦合  
   如:`from Student s where s.name = ?` 注意这里的Student不是表,而是对象(实体类)  
+  这种面向对象的HQL是低耦合的  
 
 4.Spring Data JPA  
 Spring Data JPA是Spring提供的一套简化JPA开发的框架,Spring Data JPA`通过约定好的方法命名规则来编写dao接口`,从而在不写接口实现的情况下实现对数据库的访问和操作.同时Spring Data JPA还提供了很多除了CRUD之外的功能,如分页、排序、复杂查询等  
@@ -48,6 +63,8 @@ Spring Data JPA是Spring提供的一套简化JPA开发的框架,Spring Data JPA`
 此外,Spring Data JPA致力于为数据访问(DAO)提供熟悉且一致的编程模板;对于每种持久性存储,dao通常需要为不同存储库提供不同CRUD(增删改查)持久化操作.Spring Data为这些持久性存储以及特定实现提供了通用接口(`CrudRespository、PagingAndSortingRespository`)和模板(`jdbcTemplate、redisTemplate、RestTemplate、MongoTemplate`)  
 这也是为什么使用Spring Data JPA的原因之一,<font color="#FF00FF">因为Spring Data JPA提供了对各种类型的数据库的存储服务的支持.</font>  
 *注意:这里说的dao是笼统的一种叫法,指的就是数据访问层*
+
+虽然说spring data jpa默认是基于hibernate实现的,但如果要想切换底层的实现框架也是完全可以的(可以切换为openJPA),即<font color="#FF00FF">spring data jpa支持随时切换底层的实现框架</font>  
 
 Spring Data主要模板(Spring Data支持的持久层技术非常多):  
 * Spring Data common:用于支持每个Spring Data模块的核心公共模块
@@ -104,7 +121,7 @@ public class User {
 }
 ```
 
-6.类的继承关系  
+6.Repository的继承关系  
 在JPA中`Repository`接口作为一个标识,它的子接口扩展了一些功能  
 * Repository:仅仅是一个标识,表示任何继承它的类就一个仓库接口  
   * CrudRepository:实现了CRUD相关方法
@@ -112,8 +129,267 @@ public class User {
     * QueryByExampleExecutor
       * JpaRepository:实现了JPA规范相关方法
 
-7.底层实现  
-JPA底层采用hibernate实现  
+### 1.2 Hibernate上手
+1.创建项目  
+
+2.修改pom  
+```xml
+<dependencies>
+    <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>4.13</version>
+        <scope>test</scope>
+    </dependency>
+
+    <dependency>
+        <groupId>org.hibernate</groupId>
+        <artifactId>hibernate-entitymanager</artifactId>
+        <version>5.3.32.Final</version>
+    </dependency>
+
+    <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <version>8.0.30</version>
+    </dependency>
+</dependencies>
+```
+
+3.创建实体类  
+```java
+@Entity
+@Table(name = "tb_customer")
+public class Customer {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "customer_id")
+    private Long customerId;
+
+    @Column(name = "customer_name")
+    private String customerName;
+
+    @Column(name = "customer_address")
+    private String customerAddress;
+
+    public Long getCustomerId() {
+        return customerId;
+    }
+
+    public void setCustomerId(Long customerId) {
+        this.customerId = customerId;
+    }
+
+    public String getCustomerName() {
+        return customerName;
+    }
+
+    public void setCustomerName(String customerName) {
+        this.customerName = customerName;
+    }
+
+    public String getCustomerAddress() {
+        return customerAddress;
+    }
+
+    public void setCustomerAddress(String customerAddress) {
+        this.customerAddress = customerAddress;
+    }
+}
+```
+
+*提示:*  
+在JPA中讲究代码先行,现在数据库中是没有Customer这个实体类的,但是hibernate会帮助我们自动创建对应的表  
+不过数据库是需要自已创建的,这里我们创建spring_data_jpa数据库  
+
+3.写配置文件  
+在resource目录下创建hibernate.cfg.xml作为hibernate的配置文件  
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-configuration PUBLIC
+        "-//Hibernate/Hibernate Configuration DTD 3.0//EN"
+        "http://hibernate.sourceforge.net/hibernate-configuration-3.0.dtd">
+<hibernate-configuration>
+    <session-factory>
+        <property name="connection.username">root</property>
+        <property name="connection.password">root</property>
+        <property name="connection.driver">com.mysql.jdbc.Driver</property>
+        <property name="connection.url">jdbc:mysql://192.168.149.131:7901/jdd_sport_info?useSSL=FALSE</property>
+
+
+        <!-- 选择数据库方言 -->
+        <property name="dialect">org.hibernate.dialect.MySQL8Dialect</property>
+        <!-- 是否在控制台打印sql语句 -->
+        <property name="show_sql">true</property>
+        <!-- 是否格式化sql语句，也就是是否使sql语句按标准规范打印出来 -->
+        <property name="format_sql">true</property>
+        <!-- 表的生成策略;
+        none:不自动生成;
+        update:没有的表会创建,已经存在的表会检查更新;
+        create:每次都会将表重新生成一遍 -->
+        <property name="hbm2ddl.auto">update</property>
+        <!-- 指定具体的pojo类路径,指定了路径后相当于被hibernate接管 -->
+        <mapping class="com.cnsukidayo.hibernate.Customer"/>
+    </session-factory>
+</hibernate-configuration>
+```
+
+**关于SQL方言**  
+方言说白了就是不同的数据库产品有不同的SQL语法规则,所以需要选择方言;这里选择的是MySQL8  
+找到Dialect类,按下`Ctrl+H`查看类继承关系  
+![方言](resource/JPA/5.png)  
+比如这里使用的MySQL就选择MySQL对应的方言,还可以根据不同的引擎选择不同的方言,选择方言实际上就是选择数据库  
+
+4.创建测试类  
+在测试目录下创建测试类来测试hibernate  
+```java
+public class HibernateTest {
+    // session工厂,类似mybatis中的sqlSession;是数据库的一次会话
+    private SessionFactory sessionFactory;
+
+    @Before
+    public void init() {
+        StandardServiceRegistry registry = new StandardServiceRegistryBuilder().configure("/hibernate.cfg.xml").build();
+        // 根据服务注册类创建一个元数据资源集,同时构建元数据并生成应用
+        sessionFactory = new MetadataSources(registry).buildMetadata().buildSessionFactory();
+    }
+
+    @Test
+    public void testC() {
+        // 通过Session进行持久化操作
+        Session session = sessionFactory.openSession();
+        Transaction transaction = session.beginTransaction();
+        Customer customer = new Customer();
+        customer.setCustomerName("蔡徐坤");
+        session.save(customer);
+        transaction.commit();
+        session.close();
+    }
+
+}
+```
+
+运行上述testC方法后成功在数据库中看到插入的数据  
+![结果](resource/JPA/6.png)  
+
+5.更多的示例  
+```java
+@Test
+public void testR() {
+    // 通过Session进行持久化操作
+    Session session = sessionFactory.openSession();
+    // 通过实体类进行查询
+    Customer customer = session.find(Customer.class, 1L);
+    System.out.println(customer);
+    session.close();
+}
+
+@Test
+public void testR_lazy() {
+    // 通过Session进行持久化操作
+    Session session = sessionFactory.openSession();
+    // 懒加载查询,通过控制台的日志可以发现,当调用load方法时并不会立即去数据库中查询数据,而是当真正使用customer对象时才会查询;所以这里会先打印===========这段内容,然后才去数据库中查询数据
+    Customer customer = session.load(Customer.class, 1L);
+    System.out.println("=======================");
+    System.out.println(customer);
+    session.close();
+}
+
+@Test
+public void testU() {
+    Session session = sessionFactory.openSession();
+    Customer customer = new Customer();
+    //customer.setCustomerId(1L);
+    customer.setCustomerName("鸡哥");
+    // 如果设置了id则会更新,如果没有设置id则会插入数据
+    session.saveOrUpdate(customer);
+    session.close();
+}
+
+@Test
+public void testJPQL() {
+    Session session = sessionFactory.openSession();
+    // JPQL可以省略 select * 步骤;而且这里from的不是一张表,而是一个对象
+    // 这里customerId使用的不是数据库的字段,而是对象的字段,并且后面的:id是占位符的意思,在setParameter中指定查询的具体参数即可
+    String jpql = "from Customer where customerId=:id";
+    List<Customer> resultList = session.createQuery(jpql, Customer.class)
+            .setParameter("id",1L)
+            .getResultList();
+    System.out.println(resultList);
+    session.close();
+}
+
+```
+
+### 1.3 切换JPA实现
+*提示:*hibernate只是一种JPA的实现,本节展示如何切换JPA的实现  
+在resource目录下创建META-INF目录,接着在该目录下创建persistence.xml配置文件  
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<persistence xmlns="http://java.sun.com/xml/ns/persistence" version="2.0">
+    <!--
+    持久化单元,在这里可以定义多个持久化单元;以后就可以通过这里的name来切换多个不同的JPA的实现
+    name:持久化名称
+    transaction-type:事务管理方式
+        JTA:分布式事务管理
+        RESOURCE_LOCAL:本地事务管理
+    -->
+    <persistence-unit name="hibernateJPA" transaction-type="RESOURCE_LOCAL">
+        <!--JPA的实现-->
+        <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+        <!--需要进行ORM的POJO类-->
+        <class>com.cnsukidayo.hibernate.Customer</class>
+        <!--可选配置,配置JPA实现方的配置-->
+        <properties>
+            <property name="javax.persistence.jdbc.user" value="root"/>
+            <property name="javax.persistence.jdbc.password" value="root"/>
+            <property name="javax.persistence.jdbc.driver" value="com.mysql.jdbc.Driver"/>
+            <property name="javax.persistence.jdbc.url" value="jdbc:mysql://192.168.149.131:7901/spring_data_jpa?useSSL=FALSE"/>
+            <!--配置hibernate的配置信息-->
+            <property name="hibernate.show_sql" value="true"/>
+            <property name="hibernate.hbm2ddl.auto" value="update"/>
+            <property name="hibernate.dialect" value="org.hibernate.dialect.MySQL8Dialect"/>
+        </properties>
+
+    </persistence-unit>
+</persistence>
+```
+
+1.创建测试类  
+*提示:既然是使用JPA的方式,所以肯定就不是使用hibernate的SessionFactory来操作数据库了,而是要使用JPA规范的API来进行实现了,就有点像JDBC了;我们使用的JDBC都是抽象API它背后的实现是数据库厂商进行实现的*  
+
+```java
+public class JPATest {
+
+    private EntityManagerFactory entityManagerFactory;
+
+    @Before
+    public void init() {
+        // args0:指定持久化单元的名称,和persistence.xml配置文件中的name对应
+        entityManagerFactory = Persistence.createEntityManagerFactory("hibernateJPA");
+    }
+
+    @Test
+    public void testC() {
+        EntityManager entityManager = entityManagerFactory.createEntityManager();
+        EntityTransaction transaction = entityManager.getTransaction();
+        transaction.begin();
+
+        Customer customer = new Customer();
+        customer.setCustomerName("鸡哥");
+        entityManager.persist(customer);
+
+        transaction.commit();
+    }
+
+}
+```
+
+运行代码,查看数据库发现数据已经被插入  
+![数据](resource/JPA/7.png)  
+
+
 
 ## 2.Spring Data JPA
 **目录:**  
