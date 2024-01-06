@@ -17,7 +17,6 @@
 1.ORM  
 ORM全称Object Relation Mapping;用于解决JDBC访问数据库太麻烦的问题,Mybatis、Hibernate就是ORM框架.  
 java针对ORM提出提出了`JPA`,JPA本质上是一种ORM规范,并不是ORM框架,也就是JPA为了实现ORM这一功能制定了规范,其中Hibernate就是JPA的实现,所以Hibernate拥有ORM功能.  
-
 application、JPA、JPA实现、JDBC和数据库的关系图:  
 ![关系图](resource/JPA/1.png)  
 
@@ -77,6 +76,7 @@ Spring Data主要模板(Spring Data支持的持久层技术非常多):
 * Spring Data REST:将Spring Data存储库导出为超媒体驱动的RESTful资源
 
 ![spring data jpa](resource/JPA/4.png)  
+
 
 
 5.对象/数据存储映射  
