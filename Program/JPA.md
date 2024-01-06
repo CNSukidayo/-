@@ -662,7 +662,7 @@ public class SpringDataJPATest {
       * JpaRepository:实现了JPA规范相关方法
 * QueryByExampleExecutor:详情见2.3 自定义操作=>2.3.3 Query By Example
 * JpaSpecificationExecutor:详情见2.3 自定义操作=>2.3.4 Specification
-
+* QuerydslPredicateExecutor:详情见2.3 自定义操作=>2.3.5 QueryDSL
 
 2.CrudRepository  
 *基本的CRUD接口*
@@ -870,6 +870,8 @@ public interface CustomerQBERepository extends
 }
 ```
 
+*多提一嘴:这里的QueryByExampleExecutor包括后面的JpaSpecificationExecutor、QuerydslPredicateExecutor这些执行器都是需要搭配PagingAndSortingRepository或者说是CrudRepository使用的,如果这里的接口只继承QueryByExampleExecutor这一个接口肯定是不行的,具体原理涉及到spring-data-jpa底层执行时的一些逻辑*  
+
 3.编写测试类  
 ```java
 @ContextConfiguration(classes = SpringDataJPAConfig.class)
@@ -1061,8 +1063,68 @@ Specification<InfoCommentENT> specification = (root, criteriaQuery, cb) -> {
 4.缺陷  
 * 不支持分组、聚合函数
 
+#### 2.3.5 QueryDSL
+1.介绍  
+QueryDSL是基于ORM框架或SQL平台上的一个`通用查询框架`.借助QueryDSL可以在任何支持的ORM框架或SQL平台上`以通用API方式构建查询`  
+JPA是QueryDSL的主要集成技术,是JPQL和Criteria查询的代替方法.目前QueryDSL支持的平台包括**JPA,JDO,SQL,Mongodb**等等  
 
+2.加入QueryDSL相关的依赖  
+```xml
+<querydsl.version>4.4.0</querydsl.version>
+<apt.version>1.1.3</apt.version>
 
+<dependency>
+    <groupId>com.querydsl</groupId>
+    <artifactId>querydsl-jpa</artifactId>
+    <version>${querydsl.version}</version>
+</dependency>
+<!--添加maven插件-->
+<!--这个插件是为了让程序自动生成query type(查询实体,命名方式为:"Q"+对应实体名)-->
+<build>
+    <plugins>
+        <plugin>
+            <groupId>com.mysema.maven</groupId>
+            <artifactId>apt‐maven‐plugin</artifactId>
+            <version>${apt.version}</version>
+            <dependencies>
+                <dependency>
+                    <groupId>com.querydsl</groupId>
+                    <artifactId>querydsl‐apt</artifactId>
+                    <version>${querydsl.version}</version>
+                </dependency>
+            </dependencies>
+            <executions>
+                <execution>
+                    <phase>generate‐sources</phase>
+                    <goals>
+                        <goal>process</goal>
+                    </goals>
+                    <configuration>
+                        <outputDirectory>target/generated‐sources/queries</outputDirectory>
+                        <processor>com.querydsl.apt.jpa.JPAAnnotationProcessor</processor>
+                        <logOnlyOnError>true</logOnlyOnError>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+```
+
+*提示:springboot项目引入插件可能报错,所以直接引入apt包就可以了*
+
+3.编写测试类  
+*提示:这里没跑起来,依赖导入不进来;暂时跳过,而且也不是很常用*
+
+3.QuerydslPredicateExecutor  
+* `findOne(Predicate) return Optional<T>`
+* `findAll(Predicate) return Iterable<T>`
+* `findAll(Predicate,Sort) return Iterable<T>`
+* `findAll(Predicate,OrderSpecifier<?>...) return Iterable<T>`
+* `findAll(OrderSpecifier<?>...) return Iterable<T>`
+* `findAll(Predicate,Pageable) return Page<T>`
+* `count(Predicate) return long`
+* `exists(Predicate) return boolean`
 
 
 ### 2.2 JPA注解(表/属性)
