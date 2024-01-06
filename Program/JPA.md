@@ -26,9 +26,9 @@ application、JPA、JPA实现、JDBC和数据库的关系图:
 * SQL Query:面向数据库;代表作mybatis
 
 
-|         mybatis         |                       hibernate                        |
-|:-----------------------:|:------------------------------------------------------:|
-|   小巧、半自动、直接    |                   方便、全自动、复杂                   |
+|                     mybatis                      |                       hibernate                        |
+|:------------------------------------------------:|:------------------------------------------------------:|
+|                小巧、半自动、直接                |                   方便、全自动、复杂                   |
 | 国内更流行,处理复杂查询;在比较复杂的系统进行使用 | 优势在简单查询,不太适合太复杂的查询,但符合`微服务`趋势 |
 
 **注意:**  
@@ -122,16 +122,11 @@ public class User {
 }
 ```
 
-6.Repository的继承关系  
-在JPA中`Repository`接口作为一个标识,它的子接口扩展了一些功能  
-* Repository:仅仅是一个标识,表示任何继承它的类就一个仓库接口  
-  * CrudRepository:实现了CRUD相关方法
-    * PagingAndSortingRepository:实现了分组排序相关方法
-    * QueryByExampleExecutor
-      * JpaRepository:实现了JPA规范相关方法
-
 ### 1.2 Hibernate上手
 1.创建项目  
+首先创建springdata根项目,在根项目下创建jpa-hibernate作为hibernate的上手项目  
+创建后的模块示意图如下:  
+![模块示意图](resource/JPA/9.png)  
 
 2.修改pom  
 ```xml
@@ -512,11 +507,565 @@ public void testCache() {
 
 ## 2.Spring Data JPA
 **目录:**  
+2.1 Spring Data JPA基本环境搭建  
+2.2 Spring Data Repository  
+2.3 自定义操作  
 2.2 JPA注解(表/属性)  
 2.3 JPA注解(关联)  
 
+### 2.1 Spring Data JPA基本环境搭建
+1.创建Spring Data JPA的项目  
+在springdata根模块下创建spring-data-jpa模块  
 
-### 2.2 JPA注解
+2.修改pom  
+修改父项目的pom文件,添加一个类似parent的依赖来统一之后jpa需要使用的各种依赖的版本  
+```xml
+<!-- 统一管理springdata子项目的版本 -->
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-bom</artifactId>
+            <version>2021.1.0</version>
+            <scope>import</scope>
+            <type>pom</type>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
+来到刚才创建的spring-data-jpa模块的pom文件,修改引入spring-data-jpa依赖  
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.data</groupId>
+        <artifactId>spring-data-jpa</artifactId>
+    </dependency>
+    <!--由于spring-data-jpa只是基于JPA框架的封装,所以这里需要为spring-data-jpa指定当前使用的底层jpa实现框架是什么-->
+    <dependency>
+        <groupId>org.hibernate</groupId>
+        <artifactId>hibernate-entitymanager</artifactId>
+        <version>5.5.0.Final</version>
+    </dependency>
+
+    <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>4.13</version>
+        <scope>test</scope>
+    </dependency>
+
+    <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <version>8.0.30</version>
+    </dependency>
+
+    <!--连接池-->
+    <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>druid</artifactId>
+        <version>1.2.8</version>
+    </dependency>
+    <!--spring-test-->
+    <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring‐test</artifactId>
+        <version>5.3.10</version>
+        <scope>test</scope>
+    </dependency>
+
+</dependencies>
+```
+
+3.编写实体类  
+在项目下创建com.cnsukidayo.jpa.pojo包,在该包下创建Customer和上面的定义一样  
+详情见1.2 Hibernate上手=>3.创建实体类  
+
+4.编写dao层的repository接口  
+在项目下创建com.cnsukidayo.jpa.repository包,再在该包下创建CustomerRepository接口,定义如下  
+```java
+public interface CustomerRepository extends CrudRepository<Customer, Long> {
+}
+```
+
+5.编写config配置类  
+在项目下创建com.cnsukidayo.jpa.config包,在该包下创建SpringDataJPAConfig配置类,其中的内容如下:  
+```java
+@Configuration
+// 设置repository接口的路径
+@EnableJpaRepositories(basePackages = "com.cnsukidayo.jpa.repository")
+@EnableTransactionManagement
+public class SpringDataJPAConfig {
+
+    @Bean
+    public DataSource dataSource() {
+        DruidDataSource druidDataSource = new DruidDataSource();
+        druidDataSource.setUsername("root");
+        druidDataSource.setPassword("root");
+        druidDataSource.setDriverClassName("com.mysql.jdbc.Driver");
+        druidDataSource.setUrl("jdbc:mysql://192.168.149.131:7901/spring_data_jpa?useSSL=FALSE");
+        return druidDataSource;
+    }
+
+    @Bean
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory() {
+
+        HibernateJpaVendorAdapter vendorAdapter = new HibernateJpaVendorAdapter();
+        vendorAdapter.setGenerateDdl(true);
+
+        LocalContainerEntityManagerFactoryBean factory = new LocalContainerEntityManagerFactoryBean();
+        factory.setJpaVendorAdapter(vendorAdapter);
+        // 注意这里要添加实体类的包路径
+        factory.setPackagesToScan("com.cnsukidayo.jpa.pojo");
+        factory.setDataSource(dataSource());
+        return factory;
+    }
+
+    @Bean
+    public PlatformTransactionManager transactionManager(EntityManagerFactory entityManagerFactory) {
+
+        JpaTransactionManager txManager = new JpaTransactionManager();
+        txManager.setEntityManagerFactory(entityManagerFactory);
+        return txManager;
+    }
+
+}
+```
+
+6.编写测试类  
+```java
+@ContextConfiguration(classes = SpringDataJPAConfig.class)
+@RunWith(SpringJUnit4ClassRunner.class)
+public class SpringDataJPATest {
+
+    @Autowired
+    private CustomerRepository customerRepository;
+
+    @Test
+    public void testR(){
+        Optional<Customer> customer = customerRepository.findById(1L);
+        System.out.println(customer.get());
+    }
+}
+```
+最终的结果是成功查询到数据  
+
+### 2.2 Spring Data Repository
+*解释:Spring官方提供了很多Repository,通过这些Repository来实现对数据库不同的操作*  
+
+1.Repository的继承关系  
+在JPA中`Repository`接口作为一个标识,它的子接口扩展了一些功能  
+* Repository:仅仅是一个标识,表示任何继承它的类就一个仓库接口  
+  * CrudRepository:实现了CRUD相关方法
+    * PagingAndSortingRepository:实现了分组排序相关方法
+      * JpaRepository:实现了JPA规范相关方法
+* QueryByExampleExecutor:详情见2.3 自定义操作=>2.3.3 Query By Example
+* JpaSpecificationExecutor:详情见2.3 自定义操作=>2.3.4 Specification
+
+
+2.CrudRepository  
+*基本的CRUD接口*
+* `save(S) return S`
+  用于插入和修改,有主键就是修改;没有主键就是插入;如果是插入该方法返回的对象会携带插入后的自增ID
+* `saveAll(Iterable<S>) return Iterable<S>`
+  插入一个集合
+* `findById(ID) return Optional<T>`
+  根据ID查询一个数据
+* `existsById(ID) return boolean`  
+  通过主键查询是否存在返回布尔值
+* `findAllById(Iterable<ID>) return Iterable<T>`
+  通过ID集合查询出所有的数据
+* `count() return long`
+  获取当前实体的数量
+* `deleteById(ID) return void`
+  根据ID删除实体
+* `delete(T) return void`
+  根据一个实体删除实体
+* `deleteAllById(Iterable<? extends ID>) return void`
+  根据ID批量删除实体
+* `deleteAll(Iterable<? extends T>) return void`
+  根据实体批量删除所有的实体
+* `deleteAll() return void`
+  删除所有实体
+
+3.PagingAndSortingRepository
+*实现了分页和排序的接口,该接口继承自CrudRepository*  
+* `findAll(Sort) return Iterable<T>`
+  查询所有的数据,通过Sort进行排序
+* `findAll(Pageable) return Page<T>`
+
+4.QueryByExampleExecutor  
+详情见2.3 自定义操作=>2.3.3 Query By Example
+
+**通过一个示例来演示该接口的用法**  
+3.1 修改CustomerRepository接口如下  
+```java
+public interface CustomerRepository extends PagingAndSortingRepository<Customer, Long> {
+}
+```
+
+3.2 编写测试类
+```java
+@ContextConfiguration(classes = SpringDataJPAConfig.class)
+@RunWith(SpringJUnit4ClassRunner.class)
+public class SpringDataJPAPagingAndSortTest {
+
+    @Autowired
+    private CustomerRepository customerRepository;
+
+    @Test
+    public void testPaging(){
+        System.out.println(customerRepository.findAll(PageRequest.of(0, 2)).getContent());
+    }
+    @Test
+    public void testSort(){
+      // 采用属性硬编码的方式,有个问题是属性名可能发生变化
+        Sort.by("customer_id")
+                .descending()
+                .and(Sort.by("customer_address"));
+    }
+
+    @Test
+    public void testTypeSafe() {
+        // 通过类型安全的方式来构建Sort
+        Sort.TypedSort<Customer> sortType = Sort.sort(Customer.class);
+        Sort sort = sortType.by(Customer::getCustomerId)
+                .ascending()
+                .and(
+                        sortType.by(Customer::getCustomerAddress)
+                                .descending()
+                );
+    }
+}
+```
+
+3.3 PageRequest  
+`static of(int,int,Direction,String...) return PageRequest`  
+在JPA中可以通过PageRequest的of静态方法来创建一个分页查询对象  
+agrs0:代表当前是第几页(默认从第0页开始计算)  
+args1:每页的大小  
+args2:排序的顺序;这是一个枚举类,可以自已查看该类的内容就懂了  
+args3:哪些字段参与排序  
+例如:`PageRequest.of(1, 50, Sort.Direction.DESC, "id");`  
+查找第一页,每页大小为50,按照id降序返回结果  
+
+3.4 Sort  
+当然Sort对象也是可以调用它的静态方法来构造的,用的时候只需要把sort传入到args2处即可;单独构造Sort可以使查询更加灵活  
+<font color="#00FF00">一般而言都是结合PageRequest和Sort进行使用的,单独调用findAll(Sort)方法查询所有数据比较少用</font>  
+<font color="#FF00FF">另外推荐使用类型安全的方式构建Sort避免以后数据库字段发生改变</font>  
+
+### 2.3 自定义操作
+**介绍:**  
+2.2节介绍的repository还是有很多局限性的,如果需要更加灵活的SQL查询就需要自定义擦做
+**目录:**  
+2.3.1 JPQL  
+2.3.2 规定方法名称  
+2.3.3 Query By Example  
+2.3.4 Specification  
+2.3.5 QueryDSL  
+
+#### 2.3.1 JPQL
+```java
+public interface CustomerRepository extends PagingAndSortingRepository<Customer, Long> {
+    /**
+     * 在JPA中如果要查询表中所有字段则可以省略select * 直接从from开始写
+     * 这里from的后面是实体类,而不是表
+     * where后面的条件customerName也是实体类的属性
+     * 并且该方法的参数是通过顺序来指定的,即?1占位符表示方法的第一个参数
+     */
+    @Query("from Customer where customerName = ?1")
+    Customer findCustomerByCustomerNameWithOrder(String customerName);
+
+    /**
+     * 这里如果想要使用参数名来指代占位符,不能直接使用形参的名称
+     * 而必须指定@Param注解,在该注解中指定该占位符的名称与形参的对应情况
+     * 并且必须要加冒号:
+     */
+    @Query("from Customer where customerName =: customerName")
+    Customer findCustomerByCustomerNameWithName(@Param("customerName") String customerName);
+
+    /**
+     * 更新操作
+     * 在spring-data-jpa中,增删改操作必须使用事务;
+     * @Transactional 注解可以标注在service层,也可以标注在dao层;
+     * 此外还必须标注@Modifying注解告知spring-data-jpa这是增删改的操作
+     */
+    @Modifying
+    @Transactional
+    @Query("update Customer c set c.customerName =: customerName where c.customerId =: customerId")
+    int updateCustomer(@Param("customerName") String customerName, @Param("customerId") Long customerId);
+
+    // 删除操作
+    @Modifying
+    @Transactional
+    @Query("delete from Customer c where c.customerId = ?1")
+    int deleteCustomer(Long id);
+
+    /**
+     * JPQL其实是不支持新增的
+     * 但可以通过hibernate实现伪新增的方式
+     * 如果你把以下代码复制进IDEA你会发现语法提示也没有了,而且insert爆红;
+     * 说明JPQL它是不支持插入的,但这里如果执行该方法是会插入成功的
+     * 并且这种该方法只能在hibernate中才能成功
+     */
+    @Modifying
+    @Transactional
+    @Query("insert into Customer(customerName) select c.customer from Customer c where c.customerId = ?1")
+    int insertCustomerBySelect(Long id);
+}
+```
+
+*JPQL也是支持使用原生SQL的*  
+```java
+public interface CustomerRepository extends PagingAndSortingRepository<Customer, Long> {
+    @Query(value = "select * from tb_customer where customer_name =: customerName",nativeQuery = true)
+    Customer findCustomerByCustomerNameWithNative(@Param("customerName") String customerName);
+}
+```
+需要指定`nativeQuery = true`参数  
+
+#### 2.3.2 规定方法名称
+1.Spring Data JPA的查询约定  
+![约定表](resource/JPA/8.png)
+
+2.方法名的命名规范  
+spring-data-jpa中方法命名主要由两部分组成:  
+* 主题关键字:用于决定当前方法的作用(通常用于方法的前缀)
+  * 以`find...By、read...By、get...By、query...By、search...By、stream...By`关键字开头的方法都是用于查询数据的
+  * `exists...By` 是否存在
+  * `count...By` 计数
+  * `delete...By、remove...By` 删除
+  * `...First[number(default=1)]...、...Top[number(default=1)]...`  
+    First和Top关键字可以放在find(以及其它关键字)与by之间的任意位置,其中`number`指代前多少条数据被本次方法所影响
+    例如:  
+    `findFirst8ByName()、deleteTop3ByTime()`
+  * `...Distinct...` 去重,Distinct关键字可以放在find(以及其它关键字)与by之间的任意位置
+* 谓词关键字:决定查询条件(这里只举部分例子)
+  * `And` and条件
+  * `Or` or条件
+  * `Like` 模糊查询,<font color="#00FF00">在JPA中模糊查询是需要自已拼接模糊查询%%符号的</font>
+
+**<font color="#FF00FF">通过约定的名称进行CRUD也是需要在增删改方法上面标注@Modifying注解的</font>**
+
+#### 2.3.3 Query By Example
+**不足:** 通过2.3.1节JPQL和2.3.2节的规定方法名称是不能实现动态查询条件的;
+动态查询条件的意思就是,例如做搜索查询的时候,有时需要根据名称查询,有时需要根据时间查询,只通过上述的两种方式是没办法实现这种动态查询的功能的,它不像mybatis一样如果是null就没有这个条件  
+
+通过2.3.3、2.3.4、2.3.5这三节讲述的内容都是可以实现动态查询的,但是它们的使用场景都各不相同  
+
+1.Query By Example特点介绍  
+* 它只支持查询
+* 不支持嵌套或分组的查询
+  例如查询name = '张三' or name = '李四' 这种嵌套查询就不支持,要查只能查单个
+* 只支持字符串查询 `start/contains/ends/regex`匹配和其他属性类型的精确匹配
+  即开头/包含/结尾/正则 这四种方式的匹配
+
+2.创建CustomerQBERepository  
+```java
+public interface CustomerQBERepository extends
+        PagingAndSortingRepository<Customer, Long>,
+        QueryByExampleExecutor<Customer> {
+    
+}
+```
+
+3.编写测试类  
+```java
+@ContextConfiguration(classes = SpringDataJPAConfig.class)
+@RunWith(SpringJUnit4ClassRunner.class)
+public class QBETest {
+    @Autowired
+    private CustomerQBERepository customerQBERepository;
+
+    @Test
+    public void testR() {
+        // 通过这种方式就可以做到类似mybatis一样的效果
+        // 只查询前端传过来的字段,对于对象为null的字段不进行查询
+        // 再次说明该方法只能用于查询一个对象,不能嵌套查询
+        Customer customer = new Customer();
+        customer.setCustomerName("吴亦凡");
+        customer.setCustomerAddress("朝阳看守所");
+        Example<Customer> example = Example.of(customer);
+        List<Customer> result = (List<Customer>) customerQBERepository.findAll(example);
+        System.out.println(result);
+    }
+
+    /**
+     * 通过匹配器来进行条件的限制
+     * 对应上述讲的start/contains/ends/regex这四个条件
+     */
+    @Test
+    public void testMatch() {
+        Customer customer = new Customer();
+        customer.setCustomerName("吴亦凡");
+        customer.setCustomerAddress("BEIJING");
+        // 通过该匹配器表示在查询的时候忽略customerName这个条件
+        ExampleMatcher exampleMatcher = ExampleMatcher.matching()
+                .withIgnorePaths("customerName")    // 忽略customerName条件
+                .withIgnoreCase("customerAddress") // 忽略customerAddress属性的大小写
+                .withStringMatcher(ExampleMatcher.StringMatcher.CONTAINING)
+                .withMatcher("customerName", ExampleMatcher.GenericPropertyMatcher::endsWith); //对单个属性进行匹配,第二个参数是lambda表达式
+        // 把exampleMatcher匹配器传入到Example中
+        Example<Customer> example = Example.of(customer, exampleMatcher);
+        List<Customer> result = (List<Customer>) customerQBERepository.findAll(example);
+    }
+}
+```
+
+*提示:ExampleMatcher提供了很多静态方法来对条件进行限制;再次强调它只适用于字符串查询或其它类型的精确匹配*  
+
+
+4.QueryByExampleExecutor  
+* `findOne(Example<S>) return Optional<S>`
+* `findAll(Example<S>) return Iterable<S>`
+* `findAll(Example<S>,Sort) return Iterable<S>`
+* `findAll(Example<S>,Pageable) return Page<S>`
+* `count(Example<S> example) return long`
+* `exists(Example<S>) return boolean`
+
+*注意:其实这些方法和CrudRepository中的方法没什么两样(从结果层面来说)*
+
+#### 2.3.4 Specification
+1.创建CustomerSpecificationRepository  
+```java
+public interface CustomerSpecificationRepository extends
+        PagingAndSortingRepository<Customer, Long>,
+        JpaSpecificationExecutor<Customer> {
+}
+```
+
+2.编写测试类  
+```java
+@ContextConfiguration(classes = SpringDataJPAConfig.class)
+@RunWith(SpringJUnit4ClassRunner.class)
+public class SpecificationTest {
+    @Autowired
+    private CustomerSpecificationRepository customerSpecificationRepository;
+
+    @Test
+    public void testR() {
+        List<Customer> result = customerSpecificationRepository.findAll((root, query, criteriaBuilder) -> {
+            /*
+            root:用户获取需要查询的列;得到的返回值的泛型是该属性对应的泛型(需要手动设置,默认是Object)
+            criteriaBuilder:构造查询条件
+            query:组合 orderBy,where
+             */
+            Path<Long> customerId = root.get("customerId");
+            Path<String> customerName = root.get("customerName");
+            Path<String> customerAddress = root.get("customerAddress");
+            // 通过criteriaBuilder来设置查询条件;args0:为那个字段设置条件;args1:值
+            criteriaBuilder.equal(customerAddress, "BEIJING");
+            // 返回最后一个生成的predicate即可
+            Predicate predicate = criteriaBuilder.greaterThan(customerId, 0L);
+            return predicate;
+        });
+        System.out.println(result);
+    }
+
+    @Test
+    public void testSearch() {
+        // 模拟一个真实的查询效果,假设这里的Customer是前端传过来的
+        Customer customer = new Customer();
+        customer.setCustomerName("蔡徐坤");
+
+        List<Customer> result = customerSpecificationRepository.findAll((root, query, criteriaBuilder) -> {
+            Path<Long> customerId = root.get("customerId");
+            Path<String> customerName = root.get("customerName");
+            Path<String> customerAddress = root.get("customerAddress");
+            // 需要一个List来保存所有的动态条件
+            List<Predicate> list = new ArrayList<>();
+            if (customer.getCustomerId() != null) {
+                list.add(criteriaBuilder.equal(customerId, customer.getCustomerId()));
+            }
+            if (StringUtils.hasText(customer.getCustomerName())) {
+                list.add(criteriaBuilder.equal(customerName, customer.getCustomerName()));
+            }
+            if (StringUtils.hasText(customer.getCustomerAddress())) {
+                list.add(criteriaBuilder.equal(customerAddress, customer.getCustomerAddress()));
+            }
+            Predicate predicate = criteriaBuilder.and(list.toArray(new Predicate[list.size()]));
+            return predicate;
+        });
+        System.out.println(result);
+    }
+
+    @Test
+    public void testSearchAndSort() {
+        // 模拟一个真实的查询效果,假设这里的Customer是前端传过来的
+        Customer customer = new Customer();
+        customer.setCustomerName("蔡徐坤");
+
+        List<Customer> result = customerSpecificationRepository.findAll((root, query, criteriaBuilder) -> {
+            Path<Long> customerId = root.get("customerId");
+            Path<String> customerName = root.get("customerName");
+            Path<String> customerAddress = root.get("customerAddress");
+            // 需要一个List来保存所有的动态条件
+            List<Predicate> list = new ArrayList<>();
+            if (customer.getCustomerId() != null) {
+                list.add(criteriaBuilder.equal(customerId, customer.getCustomerId()));
+            }
+            if (StringUtils.hasText(customer.getCustomerName())) {
+                list.add(criteriaBuilder.equal(customerName, customer.getCustomerName()));
+            }
+            if (StringUtils.hasText(customer.getCustomerAddress())) {
+                list.add(criteriaBuilder.equal(customerAddress, customer.getCustomerAddress()));
+            }
+            Predicate[] where = list.toArray(new Predicate[list.size()]);
+            // 如果需要按某些字段排序
+            // 需要使用query对象的方法来进行实现,最终调用getRestriction方法返回Predicate对象
+            Order desc = criteriaBuilder.desc(customerId);
+            return query.where(where).orderBy(desc).getRestriction();
+        });
+        System.out.println(result);
+    }
+
+}
+```
+
+<font color="#00FF00">这里的第三个测试方法是比较重要的,可以重点看一下</font>  
+
+3.Specifications详解  
+<font color="#00FF00">Specifications是一个用于构建动态查询条件的抽象类 </font> 
+该接口有如下方法:  
+```java
+Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder);
+```
+通过<font color="#00FF00">实现</font>该抽象方法来构建动态查询条件,查询条件最终会生成一个查询条件对象(该方法最终需要返回一个Predicate对象);该方法有三个回调参数:  
+* Root:用户获取需要查询的列  
+  如:`root.get("id")`
+* CriteriaQuery:用于自定义查询方式  
+  如:`query.distinct(true).select(...).where(...).groupBy(...).having(...).getRestriction()`最后通过getRestriction()方法,可以获得一个`Predicate`对象
+  *注意:虽然这里有groupBy和having方法,但实际上调用该方法也不会生效,因为它的底层会将你设置的值改掉,即Specification不支持分组、聚合函数;像这样的函数还有multiselect等方法,需要自已鉴别*
+* CriteriaBuilder:构造查询条件(用于构建`Predicate`对象)  
+  通过`criteriaBuilder.and(...)`、`criteriaBuilder.equal(...)`、`criteriaBuilder.greaterThan()`等方法来构建一个Predicate对象  
+
+*注意:这三个参数都是JPA规范提供的抽象类,而不是spring提供的;实际上你可以通过EntityManager来得到这三个参数构造自已的查询参数,摆脱SpringDataJPA对CriteriaQuery的限制(但要求也变高了)*
+
+通用的查询模板:  
+*提示:这里查询的方式和第2步的方式实际上是大同小异*  
+```java
+Specification<InfoCommentENT> specification = (root, criteriaQuery, cb) -> {
+  // 通过Predicate对象来构建SQL语句
+  Predicate predicate = cb.conjunction();
+  /**
+   * predicate.getExpressions()代表获取到当前动态SQL中的所有构成SQL的片段,该方法返回的是一个List集合,接着调用add方法表明添加筛选条件
+   * cb.equal()代表其中一个筛选条件是SQL中的=等于条件
+   * root.get("id")和上面的解释一致代表当前等于条件的查询字段是id,后面的1代表匹配值为1的记录
+   * 最终将predicate对象返回即可
+   */
+  predicate.getExpressions().add(cb.equal(root.get("id"), 1));
+}
+```
+
+4.缺陷  
+* 不支持分组、聚合函数
+
+
+
+
+
+### 2.2 JPA注解(表/属性)
 1.Entity命名策略  
 * 显示命名:即通过`@Table`的name属性指定对应的数据库表名称,`@Column`的name属性指定实体字段对应数据库字段的名称  
 * 隐式命名(默认):交给框架来进行隐式命名
@@ -712,48 +1261,3 @@ public interface IdClassRepository extends JpaRepository<IdClassDemo,UnionKey> {
 
 `@OrderBy`  
 指定关联查询时的排序,一般和`@@OneToMany`一起使用  
-
-
-
-
-
-Specifications:是一个用于构建动态查询条件的抽象类  
-该接口有如下方法:  
-```java
-Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder);
-```
-通过<font color="#00FF00">实现</font>该抽象方法来构建动态查询条件,查询条件最终会生成一个查询条件对象(该方法最终需要返回一个Predicate对象);该方法有三个回调参数:  
-* Root:用户获取需要查询的列  
-  如:`root.get("id")`
-* CriteriaQuery:用于自定义查询方式  
-  如:`query.distinct(true).select(...).where(...).groupBy(...).having(...).getRestriction()`最后通过getRestriction()方法,可以获得一个`Predicate`对象
-* CriteriaBuilder:构造查询条件(用于构建`Predicate`对象)  
-  通过`criteriaBuilder.and(...)`、`criteriaBuilder.equal(...)`、`criteriaBuilder.greaterThan()`等方法来构建一个Predicate对象  
-
-通用的查询模板:  
-```java
-Specification<InfoCommentENT> specification = (root, criteriaQuery, cb) -> {
-  // 通过Predicate对象来构建SQL语句
-  Predicate predicate = cb.conjunction();
-  /**
-   * predicate.getExpressions()代表获取到当前动态SQL中的所有构成SQL的片段,该方法返回的是一个List集合,接着调用add方法表明添加筛选条件
-   * cb.equal()代表其中一个筛选条件是SQL中的=等于条件
-   * root.get("id")和上面的解释一致代表当前等于条件的查询字段是id,后面的1代表匹配值为1的记录
-   * 最终将predicate对象返回即可
-   */
-  predicate.getExpressions().add(cb.equal(root.get("id"), 1));
-}
-```
-
-PageRequest:  
-`static of(int,int,Direction,String...) return PageRequest`  
-在JPA中可以通过PageRequest的of静态方法来创建一个分页查询对象  
-agrs0:代表当前是第几页(默认从第0页开始计算)  
-args1:每页的大小  
-args2:排序的顺序;这是一个枚举类,可以自已查看该类的内容就懂了  
-args3:哪些字段参与排序  
-例如:`PageRequest.of(1, 50, Sort.Direction.DESC, "id");`  
-查找第一页,每页大小为50,按照id降序返回结果  
-
-
-
