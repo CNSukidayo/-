@@ -199,7 +199,31 @@ public class Customer {
 在JPA中讲究代码先行,现在数据库中是没有Customer这个实体类的,但是hibernate会帮助我们自动创建对应的表  
 不过数据库是需要自已创建的,这里我们创建spring_data_jpa数据库  
 
-3.写配置文件  
+3.1 Entity命名策略  
+* 显示命名:即通过`@Table`的name属性指定对应的数据库表名称,`@Column`的name属性指定实体字段对应数据库字段的名称  
+* 隐式命名(默认):交给框架来进行隐式命名
+
+如果我们没有使用@Table或@Column指定了表或字段的名称,则由SpringImplicitNamingStrategy为我们隐式处理,表名隐式处理为类名,列名隐式处理为字段名.如果指定了表名列名,SpringImplicitNamingStrategy不起作用  
+将上面处理过的逻辑名称解析成物理名称.无论在实体中是否显示指定表名列名,SpringPhysicalNamingStrategy都会被调用
+
+3.2 JPA对象属性与数据库字段的映射  
+|                             Java Type                              |             Database Type             |
+|:------------------------------------------------------------------:|:-------------------------------------:|
+|                        String(char,char[])                         |   varchar(char,varchar2,clob,text)    |
+| Number(BigDecimal,BigInteger,Integer,Double,Long,Float,Short,Byte) | numeric(number,int,long,float,double) |
+|                  int,long,float,double,short,byte                  | numeric(number,int,long,float,double) |
+|                               byte[]                               |        varbinary(binary,blob)         |
+|                          boolean(Boolean)                          |   BOOLEAN(bit,smallint,int,number)    |
+|                           java.util.Date                           |       timestamp(Date,DateTime)        |
+|                           java.sql.Date                            |       Date(timestamp,datetime)        |
+|                           java.sql.Time                            |       Time(timestamp,datetime)        |
+|                         java.sql.Timestamp                         |       TIMESTAMP(datetime,Date)        |
+|                         java.util.Calendar                         |       TIMESTAMP(datetime,Date)        |
+|                           java.lang.Enum                           |         NUMERIC(varchar,char)         |
+|                       java.util.Serializable                       |        varbinary(binary,blob)         |
+
+
+4.写配置文件  
 在resource目录下创建hibernate.cfg.xml作为hibernate的配置文件  
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -237,7 +261,7 @@ public class Customer {
 ![方言](resource/JPA/5.png)  
 比如这里使用的MySQL就选择MySQL对应的方言,还可以根据不同的引擎选择不同的方言,选择方言实际上就是选择数据库  
 
-4.创建测试类  
+5.创建测试类  
 在测试目录下创建测试类来测试hibernate  
 ```java
 public class HibernateTest {
@@ -269,7 +293,7 @@ public class HibernateTest {
 运行上述testC方法后成功在数据库中看到插入的数据  
 ![结果](resource/JPA/6.png)  
 
-5.更多的示例  
+6.更多的示例  
 ```java
 @Test
 public void testR() {
@@ -510,8 +534,8 @@ public void testCache() {
 2.1 Spring Data JPA基本环境搭建  
 2.2 Spring Data Repository  
 2.3 自定义操作  
-2.2 JPA注解(表/属性)  
-2.3 JPA注解(关联)  
+2.4 JPA注解(表/属性)  
+2.5 JPA注解(关联)  
 
 ### 2.1 Spring Data JPA基本环境搭建
 1.创建Spring Data JPA的项目  
@@ -1127,31 +1151,7 @@ JPA是QueryDSL的主要集成技术,是JPQL和Criteria查询的代替方法.目�
 * `exists(Predicate) return boolean`
 
 
-### 2.2 JPA注解(表/属性)
-1.Entity命名策略  
-* 显示命名:即通过`@Table`的name属性指定对应的数据库表名称,`@Column`的name属性指定实体字段对应数据库字段的名称  
-* 隐式命名(默认):交给框架来进行隐式命名
-
-如果我们没有使用@Table或@Column指定了表或字段的名称,则由SpringImplicitNamingStrategy为我们隐式处理,表名隐式处理为类名,列名隐式处理为字段名.如果指定了表名列名,SpringImplicitNamingStrategy不起作用  
-将上面处理过的逻辑名称解析成物理名称.无论在实体中是否显示指定表名列名,SpringPhysicalNamingStrategy都会被调用
-
-2.JPA对象属性与数据库字段的映射  
-|                             Java Type                              |             Database Type             |
-|:------------------------------------------------------------------:|:-------------------------------------:|
-|                        String(char,char[])                         |   varchar(char,varchar2,clob,text)    |
-| Number(BigDecimal,BigInteger,Integer,Double,Long,Float,Short,Byte) | numeric(number,int,long,float,double) |
-|                  int,long,float,double,short,byte                  | numeric(number,int,long,float,double) |
-|                               byte[]                               |        varbinary(binary,blob)         |
-|                          boolean(Boolean)                          |   BOOLEAN(bit,smallint,int,number)    |
-|                           java.util.Date                           |       timestamp(Date,DateTime)        |
-|                           java.sql.Date                            |       Date(timestamp,datetime)        |
-|                           java.sql.Time                            |       Time(timestamp,datetime)        |
-|                         java.sql.Timestamp                         |       TIMESTAMP(datetime,Date)        |
-|                         java.util.Calendar                         |       TIMESTAMP(datetime,Date)        |
-|                           java.lang.Enum                           |         NUMERIC(varchar,char)         |
-|                       java.util.Serializable                       |        varbinary(binary,blob)         |
-
-3.注解大全  
+### 2.4 JPA注解(表/属性)  
 `@Entity`  
 用于添加在实体类上,定义该JAVA类成为被JPA管理的实体,将映射到指定的数据库表.如定义一个实体类Category,它将映射到数据库中的category表中  
 
@@ -1266,7 +1266,9 @@ public interface IdClassRepository extends JpaRepository<IdClassDemo,UnionKey> {
 `@Inheritance`  
 控制实体之间的继承关系 
 
-### 2.3 JPA注解(关联)
+### 2.5 JPA注解(关联)
+*提示:spring-data-jpa本身并没有提供关联表支持,这里的关联完全是由hibernate实现JPA规范从而得到支持的*  
+
 `@JoinColumn`  
 用于指定连接实体关联或元素集合的列  
 * name:外键列的名称
