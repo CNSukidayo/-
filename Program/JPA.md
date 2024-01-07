@@ -1,6 +1,7 @@
 # 目录  
 1.JPA基本概念介绍  
 2.Spring Data JPA  
+3.底层原理  
 3.杂项  
 
 
@@ -536,6 +537,8 @@ public void testCache() {
 2.3 自定义操作  
 2.4 JPA注解(表/属性)  
 2.5 JPA注解(关联)  
+2.6 乐观锁  
+2.7 审计  
 
 ### 2.1 Spring Data JPA基本环境搭建
 1.创建Spring Data JPA的项目  
@@ -1268,6 +1271,93 @@ public interface IdClassRepository extends JpaRepository<IdClassDemo,UnionKey> {
 
 ### 2.5 JPA注解(关联)
 *提示:spring-data-jpa本身并没有提供关联表支持,这里的关联完全是由hibernate实现JPA规范从而得到支持的*  
+**目录:**  
+2.5.1 基本环境搭建  
+2.5.2 一对一关系  
+2.5.3 一对多关系  
+2.5.4 多对一关系  
+2.5.5 多对多关系  
+
+#### 2.5.1 基本环境搭建
+1.spring-data-jpa关联特性  
+* 在增加/删除/查询/修改的时候可以同时对关联的表进行关联操作
+
+2.新建模块spring-data-jpa-relation  
+新建一个spring-data-jpa-relation模块作为本次的测试,修改pom文件的内容如下  
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.data</groupId>
+        <artifactId>spring-data-jpa</artifactId>
+    </dependency>
+    <!--由于spring-data-jpa只是基于JPA框架的封装,所以这里需要为spring-data-jpa指定当前使用的底层jpa实现框架是什么-->
+    <dependency>
+        <groupId>org.hibernate</groupId>
+        <artifactId>hibernate-entitymanager</artifactId>
+        <version>5.5.0.Final</version>
+    </dependency>
+
+    <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>4.13</version>
+        <scope>test</scope>
+    </dependency>
+
+    <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <version>8.0.30</version>
+    </dependency>
+    <!--连接池-->
+    <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>druid</artifactId>
+        <version>1.2.8</version>
+    </dependency>
+    <!--spring-test-->
+    <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-test</artifactId>
+        <version>5.3.11</version>
+        <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <version>1.18.22</version>
+        <scope>compile</scope>
+    </dependency>
+</dependencies>
+```
+
+3.编写config配置文件  
+参考2.1 Spring Data JPA基本环境搭建=>5.编写config配置文件
+
+#### 2.5.2 一对一关系
+1.注解介绍  
+`@OneToOne`  
+标注在实体类的属性上,并且该属性也是一个实体(可以看下面的例子)
+关联分为两种:
+* **单向关联:** 如果只有一方引用另一方则称为单向关联  
+* **双向关联:** 如果双方互相引用则称为双向关联  
+- - -
+* targetEntity:关联的目标实体类,默认字段或属性的类型
+* cascade:级联操作策略,默认情况下没有级联操作(配置枚举类)
+  * ALL:所有操作关联修改
+  * PERSIST:新增操作关联修改
+  * MERGE:修改操作关联修改
+  * REMOVE:删除操作关联修改
+  * REFRESH:刷新操作关联修改
+  * DETACH:
+* fetch:数据获取方式,默认EAGER,立即查询
+  * EAGER:立即查询
+  * LAZY:懒加载
+* optional:是否允许关联对象对null,默认为true
+* mappedBy:拥有关系的字段,此元素仅在关联的反(非拥有)端指定,关联关系被谁维护
+  * mappedBy不能与@JoinColumn、@JoinTable同时使用
+  * mappedBy的值是另一方实体属性的名称
+* orphanRemoval:是否级联删除,和CascadeType.REMOVE效果一样,这两个配置只要配置其中一个就会生效;默认false;通常在修改的时候会用到
 
 `@JoinColumn`  
 用于指定连接实体关联或元素集合的列  
@@ -1281,8 +1371,418 @@ public interface IdClassRepository extends JpaRepository<IdClassDemo,UnionKey> {
 * columnDefinition:DDL SQL片段
 * foreignKey:于在表生成时指定或控制外键约束的生成.如果未指定此元素,则将应用持久性提供程序的默认外键策略.一般默认即可
 
+*提示:@OneToOne配合@JoinColumn一起使用,可以单项关联也可以双向关联,是具体情况而定.双向一对一决定哪一方来管理外键,通常使用常用的一方来管理*
+
+2.创建pojo实体类  
+创建Customer和Account类作为本次一对一关系的实验  
+```java
+@Data
+@Entity
+@Table(name = "tb_customer")
+public class Customer {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "customer_id")
+    private Long customerId;
+
+    @Column(name = "customer_name")
+    private String customerName;
+
+    @Column(name = "customer_address")
+    private String customerAddress;
+
+    /**
+     * 单向关联,一对一<br>
+     * 通过@JoinColumn设置外键ID,即当前Customer表会有一个account_id字段外键关联Account表的id字段
+     */
+    @OneToOne
+    @JoinColumn(name = "account_id")
+    private Account account;
+
+}
+```
+
+```java
+@Data
+@Entity
+@Table(name = "tb_account")
+public class Account {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "account_id")
+    private Long id;
+
+    @Column(name = "account_user_name")
+    private String userName;
+
+    @Column(name = "account_password")
+    private String password;
+}
+```
+
+*这里只有Customer关联Account,所以这里是**单向关联***  
+
+3.编写repository类  
+```java
+public interface CustomerRepository extends PagingAndSortingRepository<Customer, Long> {
+}
+```
+
+4.修改Customer表配置关联操作  
+如果这里直接测试运行添加Customer对象则会报错,提示没有添加关联操作;修改Customer如下  
+```java
+@Data
+@Entity
+@Table(name = "tb_customer")
+public class Customer {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "customer_id")
+    private Long customerId;
+
+    @Column(name = "customer_name")
+    private String customerName;
+
+    @Column(name = "customer_address")
+    private String customerAddress;
+
+    // 主要修改这里,所有操作都会关联修改
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "account_id")
+    private Account account;
+
+}
+
+```
+
+5.编写测试类  
+```java
+@ContextConfiguration(classes = SpringDataJPAConfig.class)
+@RunWith(SpringJUnit4ClassRunner.class)
+public class OneToOneTest {
+
+    @Autowired
+    private CustomerRepository customerRepository;
+
+    @Test
+    public void testC() {
+        // 初始化数据
+        Account account = new Account();
+        account.setUserName("caixukun");
+        Customer customer = new Customer();
+        customer.setCustomerName("蔡徐坤");
+        customer.setAccount(account);
+
+        customerRepository.save(customer);
+    }
+
+    @Test
+    public void testR() {
+        // 输出Optional[Customer(customerId=1, customerName=蔡徐坤, customerAddress=null, account=Account(id=1, userName=caixukun, password=null))]
+        System.out.println(customerRepository.findById(1L));
+    }
+
+}
+```
+
+查看结果,可以看到两条数据都插入到数据库中了  
+![查看结果](resource/JPA/10.png)  
+
+6.测试`fetch = FetchType.LAZY`属性  
+
+修改Customer表中Account属性如下  
+```java
+@OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+@JoinColumn(name = "account_id")
+private Account account;
+```
+
+**编写测试方法:**  
+```java
+@Test
+@Transactional
+public void testLazy() {
+    Optional<Customer> customer = customerRepository.findById(1L);
+    System.out.println("=============");
+    System.out.println(customer.get()); // 调用toString方法时会调用打印account对象,此时才会去查询account对象
+}
+```
+该方法的执行顺序是先查询Customer对象,然后打印=============;最后查询Account对象,而不是一开始就查询Customer+Account对象  
+所以懒加载就是在关联关系中,当你用到了关联对象时才去查询而不是立即去查询,从而提高性能  
+*提示:可以看到这里配置了@Transactional,这是因为当repository调用完方法之后session就会关闭,一旦session关闭之后就不能进行查询,所以这里需要使用事务让session直到事务关闭了之后再关闭session*  
+
+7.双向关联一对一  
+**不足:**  
+现在Customer和Account是一对一的关系,之前已经尝试过通过级联删除在删除Customer对象的同时删除Account对象,假设现在需要在删除Account对象的同时删除Customer对象就需要使用双向关联.  
+假设现在也在Account对象中关联一个@OneToOne以及@JoinColumn注解指定外键;则由于MySQL外键的特性,当要删除account表中的一条数据,由于该数据被customer表关联了所以必须先删除customer表中的数据再删除account表中的数据,假设现在account表和customer表互相关联,则最终的结果就是<font color="#00FF00">这两张表的数据全都删不掉</font>.
+```java
+@Data
+@Entity
+@Table(name = "tb_account")
+public class Account {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "account_id")
+    private Long id;
+
+    @Column(name = "account_user_name")
+    private String userName;
+
+    @Column(name = "account_password")
+    private String password;
+
+    @OneToOne
+    @JoinColumn(name = "customer_id")
+    private Customer customer;
+}
+```
+但实际上在spring-data-jpa是可以实现双向删除的,具体的原理就是spring-data-jpa在删除某条数据之前先将**关联记录的外键**设置为一个不存在的外键,然后在把当前记录删除之后再删除关联的记录
+
+另外一种方式是某一方放弃外键关联,使用@OneToOne注解的mappedBy属性来取消关联;修改Customer对象的内容如下  
+```java
+@Data
+@Entity
+@Table(name = "tb_customer")
+public class Customer {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "customer_id")
+    private Long customerId;
+
+    @Column(name = "customer_name")
+    private String customerName;
+
+    @Column(name = "customer_address")
+    private String customerAddress;
+
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "customer")
+    // @JoinColumn(name = "account_id")
+    private Account account;
+}
+```
+
+*注意:mappedBy指定为目标对象中关联当前对象的属性名称,例如这里就是customer,另外这里就没必要使用@JoinColumn注解了*    
+
+#### 2.5.3 一对多关系
+1.注解详解  
+`@OneToMany`  
+指定一个具有一对多的多值关联
+*提示:如果使用泛型定义集合以指定元素类型,则不需要指定关联的目标实体类型;否则,必须指定目标实体类*  
+*提示:如果关系是双向的,则必须使用mappedBy元素指定关系的所有者实体的关系字段或属性*
+
+* targetEntity:关联的目标实体类
+  * 只有使用java泛型定义集合时,才是可选的;否则必须指定
+  * 使用泛型定义时,默认为集合的参数化类型
+* cascade:级联操作策略;默认情况下没有级联操作
+* fetch:数据获取方式,默认LAZY,延迟加载`(与一对一、多对一不同)`
+  * EAGER:立即查询
+  * LAZY:懒加载
+* mappedBy:拥有关系的字段.除非关系是单向的,否则是必需的
+* orphanRemoval: 是否级联删除,和CascadeType.REMOVE效果一样,只要配置其中一种就会级联删除.默认false,指定集合中的一个元素中集合中移除,是否从数据库中删除
+
+*提示:@OneToMany单独使用建立单项一对多关系时,如果不配合@JoinColumn使用,会额外产生一张表来维护关联关系.配合@JoinColumn使用时,外键会生成在目标表中*  
+*提示:这个注解修饰的集合元素必须是被@Entity修饰的JPA类.如果集合的元素是基本类型,则需要使用内嵌表示@ElementCollection*
+
+`@OrderBy`  
+指定关联查询时的排序,一般和`@OneToMany`一起使用
+
+2.新增pojo类  
+```java
+@Entity
+@Table(name = "tb_message")
+@Data
+public class Message {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "message_id")
+    private Long id;
+
+    @Column(name = "message_info")
+    private String info;
+
+}
+```
+
+3.修改Customer类的定义  
+*提示:现在的需求是一个Customer对应多个Message对象,那么就需要在**一**的这一方即Customer这一方添加关联关系*  
+```java
+@Data
+@Entity
+@Table(name = "tb_customer")
+public class Customer {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "customer_id")
+    private Long customerId;
+
+    @Column(name = "customer_name")
+    private String customerName;
+
+    @Column(name = "customer_address")
+    private String customerAddress;
+
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "customer")
+    @JoinColumn(name = "account_id")
+    private Account account;
+
+    @OneToMany(cascade = CascadeType.ALL)
+    @JoinColumn(name = "customer_id")
+    private List<Message> messages;
+
+}
+```
+
+*注意:这里和一对一就体现出区别了,一对一声明的@JoinColumn注解中指定的属性account_id是声明在当前tb_customer这张表下的,而在一对多中声明的属性customer_id是添加到tb_message这张表下面的.这是因为在一对多关系中,外键很显然是放在**多**的这一端的*  
+
+4.编写测试类  
+```java
+@ContextConfiguration(classes = SpringDataJPAConfig.class)
+@RunWith(SpringJUnit4ClassRunner.class)
+public class OneToManyTest {
+
+    @Autowired
+    private CustomerRepository customerRepository;
+
+    @Test
+    public void testC() {
+        List<Message> messages = new ArrayList<>();
+        Message message0 = new Message();
+        message0.setInfo("鸡你");
+        Message message1 = new Message();
+        message1.setInfo("太美");
+        messages.add(message0);
+        messages.add(message1);
+        Customer customer = new Customer();
+        customer.setCustomerName("丁真");
+        customer.setMessages(messages);
+        customerRepository.save(customer);
+    }
+
+}
+```
+**执行结果如下:**  
+![一对多](resource/JPA/11.png)  
+
+5.更多示例  
+```java
+@Test
+@Transactional(readOnly = true)
+public void testR() {
+    /*
+    该方法最终执行的效果是先打印======
+    在执行SQL,这是因为在一对多的关系中默认就是使用懒加载
+    所以这也是为什么该方法需要使用@Transactional注解,这和之前2.5.2 一对一关系
+    =>6.测试`fetch = FetchType.LAZY` 时的原因是一样的,都是因为
+    customerRepository执行完后就关闭session导致的
+    */
+    // 可以通过fetch修改为立即加载
+    Optional<Customer> result = customerRepository.findById(1L);
+    System.out.println("=========");
+    System.out.println(result);
+}
+```
+
+#### 2.5.4 多对一关系
+1.注解详情  
+`ManyToOne`  
+指定与另一个具有多对一的实体类的单值关联  
+* targetEntity:关联的目标实体类,默认字段或属性的类型
+* cascade:级联操作策略,默认情况下没有级联操作
+* fetch:数据获取方式,是懒加载还是立即加载;默认为立即加载
+* optional:是否允许为空,默认为true
+
+2.修改Message对象的定义  
+```java
+@Data
+@Entity
+@Table(name = "tb_message")
+public class Message {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "message_id")
+    private Long id;
+
+    @Column(name = "message_info")
+    private String info;
+
+    @ManyToOne
+    @JoinColumn(name = "customer_id")
+    private Customer customer;
+
+}
+```
+这里使用了多对一注解,<font color="#FF00FF">所以如何判断是一对多还是多对一取决于那一方去维护</font>,而且这里message和customer之间的关系是确定的,即一个customer对应多个message;如果在customer中维护就是一对多,如果在message中维护就是多对一.  
+
+3.创建MessageRepository  
+```java
+public interface MessageRepository extends PagingAndSortingRepository<Message, Long> {
+    /**
+     * 通过约定方法来实现关联查询,需要通过关联属性进行匹配
+     * 但是只能通过id进行匹配
+     */
+    List<Message> findByCustomer(Customer customer);
+}
+```
+
+4.创建测试类  
+```java
+@ContextConfiguration(classes = SpringDataJPAConfig.class)
+@RunWith(SpringJUnit4ClassRunner.class)
+public class ManyToOneTest {
+
+    private MessageRepository messageRepository;
+
+    @Test
+    public void testC() {
+        Customer customer = new Customer();
+        customer.setCustomerName("马嘉祺");
+        List<Message> list = new ArrayList<>();
+        Message message0 = new Message();
+        message0.setInfo("小");
+        message0.setCustomer(customer);
+        Message message1 = new Message();
+        message1.setInfo("气球");
+        message1.setCustomer(customer);
+        list.add(message0);
+        list.add(message1);
+        customer.setMessages(list);
+        messageRepository.saveAll(list);
+    }
+
+    @Test
+    public void testR() {
+        // 这里设置setCustomerName方法是没用的,因为findByCustomer只会通过customerId来进行查询
+        Customer customer = new Customer();
+        customer.setCustomerId(1L);
+        customer.setCustomerName("xxxx");
+        List<Message> messages = messageRepository.findByCustomer(customer);
+        // 这里可能会报错留个心眼,循环调用toString
+        System.out.println(messages);
+    }
+}
+```
+<font color="#00FF00">在真实的业务场景中通过多端插入多条数据是更合理的</font>
+
+#### 2.5.5 多对多关系
+1.注解详解  
+`ManyToMany`  
+指定具有多对多多重性的多值关联  
+* targetEntity:关联的目标实体类,只有使用java泛型定义集合时,才是可选的.否则必须指定,使用泛型定义时,默认为集合的参数化类型
+* cascade:级联操作策略
+* fetch:延迟加载设置;默认是懒加载
+* mappedBy:拥有关系的字段;除非关系是单向的,否则是必须的
+
 `@JoinTable`  
-指定关联的目标表配置,如果没有@JoinTable注解,则使用注解元素默认值
+指定关联的中间表配置,如果没有@JoinTable注解,则使用注解元素默认值  
+<font color="#00FF00">在多对多关系中必然要使用中间表,所以@JoinColumn注解不起作用,需要替换为@JoinTable注解进行使用</font>  
 * name:连接表名称.(默认:两个关联的主实体表的连接名称,用下划线分隔,如:table_b_table_b)
 * catalog:表的目录;默认为默认目录.一般默认即可.
 * schema:表的schema.默认为用户的默认schema.一般默认即可.
@@ -1293,35 +1793,408 @@ public interface IdClassRepository extends JpaRepository<IdClassDemo,UnionKey> {
 * uniqueConstraints:要放在表上的唯一约束.只有在表生成时才使用这些方法.默认没有* 附加约束.一般默认即可.
 * indexes:表的索引.只有在表生成时才使用这些方法.一般默认即可.
 
-`@OneToOne`  
-指定与具有一对一多重性的另一个实体的单值关联  
-*提示:非拥有方必须使用OneToOne注释的mappedBy元素来指定拥有方的关系字段或属性*  
-* targetEntity:关联的目标实体类,默认字段或属性的类型
-* cascade:级联操作策略,默认情况下没有级联操作
-* fetch:数据获取方式,默认EAGER,立即获取
-* optional:是否允许为空,默认为true
-* mappedBy:拥有关系的字段,此元素仅在关联的反(非拥有)端指定,关联关系被谁维护
-  * mappedBy不能与@JoinColumn、@JoinTable同时使用
-  * mappedBy指的是另一方实体属性的名称
-* orphanRemoval:是否级联删除,和CascadeType.REMOVE效果一样,只要配置其中一种就会级联删除;默认false
+*提示:@ManyToMany一般和@JoinTable一起使用*
+<font color="#00FF00">多对多也分为单向多对多和双向多对对</font>  
 
-*提示:@OneToOne配合@JoinColumn一起使用,可以单项关联也可以双向关联,是具体情况而定.双向一对一决定哪一方来管理外键,通常使用常用的一方来管理*
+2.需求介绍  
+现在模拟多对多的关联关系,由customer、role、customer_role这三张表构成,分别是用户、角色、用户角色表  
 
-`@OneToMany`  
-指定一个具有一对多的多值关联
-*提示:如果使用泛型定义集合以指定元素类型,则不需要指定关联的目标实体类型;否则,必须指定目标实体类*  
-*提示:如果关系是双向的,则必须使用mappedBy元素指定关系的所有者实体的关系字段或属性*
+3.编写pojo类  
+```java
+@Data
+@Entity
+@Table(name = "tb_customer")
+public class Customer {
 
-* targetEntity:关联的目标实体类
-  * 只有使用java泛型定义集合时,才是可选的;否则必须指定
-  * 使用泛型定义时,默认为集合的参数化类型
-* cascade:级联操作策略;默认情况下没有级联操作
-* fetch:数据获取方式,默认LAZY,延迟加载(与一对一、多对一不同)
-* mappedBy:拥有关系的字段.除非关系是单向的,否则是必需的
-* orphanRemoval: 是否级联删除,和CascadeType.REMOVE效果一样,只要配置其中一种就会级联删除.默认false,指定集合中的一个元素中集合中移除,是否从数据库中删除
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "customer_id")
+    private Long customerId;
 
-*提示:@OneToMany单独使用建立单项一对多关系时,如果不配合@JoinColumn使用,会额外产生一张表来维护关联关系.配合@JoinColumn使用时,外键会生成在目标表中*  
-*提示:这个注解修饰的集合元素必须是被@Entity修饰的JPA类.如果集合的元素是基本类型,则需要使用内嵌表示@ElementCollection*
+    @Column(name = "customer_name")
+    private String customerName;
 
-`@OrderBy`  
-指定关联查询时的排序,一般和`@@OneToMany`一起使用  
+    @Column(name = "customer_address")
+    private String customerAddress;
+
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "customer")
+    @JoinColumn(name = "account_id")
+    private Account account;
+
+    @OneToMany(cascade = CascadeType.ALL)
+    @JoinColumn(name = "customer_id")
+    private List<Message> messages;
+
+    // 这里是单向多对多
+    @ManyToMany(cascade = CascadeType.ALL)
+    @JoinTable(
+            name = "tb_customer_role",
+            joinColumns = {@JoinColumn(name = "c_id")},
+            inverseJoinColumns = {@JoinColumn(name = "r_id")}
+    )
+    private List<Role> roles;
+
+}
+```
+
+```java
+@Data
+@Entity
+@Table(name = "tb_role")
+public class Role {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "role_name")
+    private String rName;
+
+}
+```
+
+4.编写测试类  
+```java
+@ContextConfiguration(classes = SpringDataJPAConfig.class)
+@RunWith(SpringJUnit4ClassRunner.class)
+public class ManyToManyTest {
+
+    @Autowired
+    private CustomerRepository customerRepository;
+
+    @Test
+    public void testC() {
+        List<Role> roles = new ArrayList<>();
+        Role role0 = new Role();
+        role0.setRName("超级管理员");
+        Role role1 = new Role();
+        role1.setRName("商品管理员");
+        Customer customer = new Customer();
+        roles.add(role0);
+        roles.add(role1);
+        customer.setRoles(roles);
+
+        customerRepository.save(customer);
+    }
+
+}
+
+```
+
+![运行结果](resource/JPA/12.png)  
+
+5.更多示例  
+```java
+@Test
+// 同样多对多是懒加载
+@Transactional(readOnly = true)
+public void testR() {
+    // 该方法输出结果为:Optional[Customer(customerId=10, customerName=null, customerAddress=null, account=null, messages=[], roles=[Role(id=1, rName=超级管理员), Role(id=2, rName=商品管理员)])]
+    System.out.println(customerRepository.findById(10L));
+}
+
+@Test
+@Transactional
+// 需要添加@Commit注解,这是spring单元测试中的注解,正常springboot项目是不需要使用该注解的
+@Commit
+public void testD() {
+    Optional<Customer> customer = customerRepository.findById(10L);
+    customerRepository.delete(customer.get());
+}
+
+```
+
+6.双向多对多  
+修改
+```java
+@Data
+@Entity
+@Table(name = "tb_role")
+public class Role {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "role_name")
+    private String rName;
+    /*
+    由于已经在Customer实体对象中指定了@JoinTable注解了
+    所以这里就没必要再添加了,双向多对多只需要一方指定就可以了
+    */
+    @ManyToMany(cascade = CascadeType.ALL)
+    private List<Role> roles;
+}
+```
+
+### 2.6 乐观锁
+1.介绍  
+乐观锁同样是hibernate中提供的支持  
+有机会可以学习一下hibernate  
+乐观锁的概念可以学习一下  
+
+2.上手体验  
+想要使用乐观锁在hibernate中十分方便  
+在customer类中加入以下字段即可  
+```java
+private @Version Long version;
+```
+
+### 2.7 审计
+1.什么是审计  
+在阿里巴巴开发规范手册中提到过,每张表都需要加四个字段:创建人、创建时间、修改时间、修改人  
+这样可以方便追溯以及一些记录  
+所以每次创建更新字段时就需要频繁修改这些值,spring-data-jpa为这一功能提供了支持
+
+2.修改pojo类  
+```java
+@Data
+@Entity
+@Table(name = "tb_customer")
+public class Customer {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "customer_id")
+    private Long customerId;
+
+    @Column(name = "customer_name")
+    private String customerName;
+
+    @Column(name = "customer_address")
+    private String customerAddress;
+
+    /**
+     * 单向关联,一对一<br>
+     * 通过@JoinColumn设置外键ID,即当前Customer表会有一个account_id字段外键关联Account表的id字段
+     */
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "customer")
+    @JoinColumn(name = "account_id")
+    private Account account;
+
+    @OneToMany(cascade = CascadeType.ALL)
+    @JoinColumn(name = "customer_id")
+    private List<Message> messages;
+
+
+    @ManyToMany(cascade = CascadeType.ALL)
+    @JoinTable(
+            name = "tb_customer_role",
+            joinColumns = {@JoinColumn(name = "c_id")},
+            inverseJoinColumns = {@JoinColumn(name = "r_id")}
+    )
+    private List<Role> roles;
+
+    @CreatedBy
+    private String createBy;
+
+    @LastModifiedBy
+    private String modifiedBy;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @CreatedDate
+    protected Date dateCreate = new Date();
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @LastModifiedDate
+    protected Date dateModified = new Date();
+}
+```
+
+3.编写AuditorAwareBean  
+在SpringDataJPAConfig类中往容器中添加Bean  
+```java
+@Bean
+public AuditorAware<String> auditorAware() {
+    /*
+    该方法返回的泛型要和实体类中@CreatedBy指定的泛型匹配
+    相当于被@CreatedBy注解标注的实体类属性,在插入前会调用该方法获取插入的值
+    调用的时候只会调用泛型匹配的方法
+    */
+    return () -> Optional.of("zhangsan");
+}
+```
+
+*注意泛型需要匹配*  
+
+4.在Customer类上添加`@EntityListeners(AuditingEntityListener.class)`注解  
+这是固定写法  
+```java
+@Data
+@Entity
+@Table(name = "tb_customer")
+@EntityListeners(AuditingEntityListener.class)
+public class Customer {
+}
+```
+
+5.添加`@EnableJpaAuditing`注解  
+在SpringDataJPAConfig类上添加`@EnableJpaAuditing`注解
+```java
+@Configuration
+@EnableJpaRepositories(basePackages = "com.cnsukidayo.jpa.repository")
+@EnableTransactionManagement
+@EnableJpaAuditing
+public class SpringDataJPAConfig {
+}
+```
+
+6.添加依赖  
+这里需要添加spring-aspects依赖否则会报错
+```xml
+<dependency>
+    <groupId>org.springframework</groupId>
+    <artifactId>spring-aspects</artifactId>
+    <version>5.3.10</version>
+</dependency>
+```
+
+7.运行测试代码  
+```java
+@Test
+public void testC() {
+    List<Message> messages = new ArrayList<>();
+    Message message0 = new Message();
+    message0.setInfo("鸡你");
+    Message message1 = new Message();
+    message1.setInfo("太美");
+    messages.add(message0);
+    messages.add(message1);
+    Customer customer = new Customer();
+    customer.setCustomerName("丁真");
+    customer.setMessages(messages);
+    customerRepository.save(customer);
+}
+```
+最终的运行结果如下  
+![最终运行结果](resource/JPA/13.png)  
+
+
+## 3.底层原理
+**目录:**  
+3.1 Repository底层原理  
+3.2 Spring整合JPA的原理  
+
+
+### 3.1 Repository底层原理  
+1.动态代理  
+Repository的实现原理实际上就是JDK的动态代理;像是PagingAndSortingRepository、QueryByExampleExecutor、JpaSpecificationExecutor这些接口都有一个默认的实现`SimpleJpaRepository`,也就是说普通的CRUD方法实际上调用的是SimpleJpaRepository实现类的实现方法  
+
+2.手写一个JPA实现  
+首先有CustomerRepository抽象类定义如下,这是使用层面使用的类  
+```java
+public interface CustomerRepository extends PagingAndSortingRepository<Customer, Long> {
+}
+```
+
+接着有我们自已的实现类,内容如下  
+```java
+public class MyJPARepository implements PagingAndSortingRepository {
+    private EntityManager entityManager;
+    private Class aClass;
+    public MyJPARepository(EntityManager entityManager, Class aClass) {
+        this.entityManager = entityManager;
+        this.aClass = aClass;
+    }
+
+    @Override
+    public Optional findById(Object id) {
+        return Optional.ofNullable(entityManager.find(aClass, id));
+    }
+
+}
+```
+
+**解释:**  
+我们的类实现了PagingAndSortingRepository接口,并且为接口的findById提供了一个默认的实现,于是乎之后我们就可以使用JDK的动态代理,根据被代理类调用的方法名称来调用代理类的真实方法  
+
+动态代理类MyJPAProxy:  
+```java
+public class MyJPAProxy implements InvocationHandler {
+
+    private EntityManager entityManager;
+    private Class aClass;
+
+    public MyJPAProxy(EntityManager entityManager, Class aClass) {
+        this.entityManager = entityManager;
+        this.aClass = aClass;
+    }
+
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        MyJPARepository myJPAProxy = new MyJPARepository(entityManager, aClass);
+        Method proxyMethod = myJPAProxy.getClass().getMethod(method.getName(), method.getParameterTypes());
+        return proxyMethod.invoke(myJPAProxy, args);
+    }
+}
+```
+
+测试类:  
+```java
+public class JPAProxyTest {
+
+    @Test
+    public void testP() throws ClassNotFoundException {
+        // 创建Spring容器
+        AnnotationConfigApplicationContext annotationConfigApplicationContext = new AnnotationConfigApplicationContext(SpringDataJPAConfig.class);
+        // 从容器中获取获取LocalContainerEntityManagerFactoryBean然后得到EntityManager
+        LocalContainerEntityManagerFactoryBean entityManagerFactoryBean = annotationConfigApplicationContext.getBean(LocalContainerEntityManagerFactoryBean.class);
+        EntityManager entityManager = entityManagerFactoryBean.createNativeEntityManager(null);
+        // 通过反射获取当前接口泛型中指定的泛型类型
+        ParameterizedType parameterizedType = (ParameterizedType) CustomerRepository.class.getGenericInterfaces()[0];
+        Type type = parameterizedType.getActualTypeArguments()[0];
+        Class<?> aClass = Class.forName(type.getTypeName());
+        CustomerRepository customerRepository = (CustomerRepository) Proxy.newProxyInstance(
+                CustomerRepository.class.getClassLoader(),
+                new Class[]{CustomerRepository.class},
+                new MyJPAProxy(entityManager, aClass)
+        );
+        Optional<Customer> customer = customerRepository.findById(10L);
+        System.out.println("输出结果:" + customer);
+    }
+
+}
+```
+
+输出结果:Optional[Customer(customerId=10, customerName=null, customerAddress=null, account=null, messages=[], roles=[Role(id=1, rName=超级管理员), Role(id=2, rName=商品管理员)], createBy=null, modifiedBy=null, dateCreate=null, dateModified=null)]
+
+3.看源码  
+*提示:看源码讲究先看主线、整体;之后再追究细节*  
+
+3.1 当调用repository接口的方法时最先会来到`JdkDynamicAopProxy`这个类是AOP的统一处理类,这里会执行该类的`invoke`方法  
+至于为什么JdkDynamicAopProxy会代理repository接口,之后再说  
+
+3.2 获取目标类  
+之后会执行到`target = targetSource.getTarget();`这段代码,这段代码会获取到当前实现repository接口的目标实现类,也就是`SimpleJpaRepository`类  
+![目标类](resource/JPA/14.png)  
+
+3.3 SimpleJpaRepository实现  
+![实现](resource/JPA/15.png)  
+最终它会调用`SimpleJpaRepository`类的实现方法,而SimpleJpaRepository类里的这些实现方法都是通过`EntityManager`来实现的  
+所以结论就是JPA的底层实现是通过<font color="#FF00FF">JDK动态代理+EntityManager进行实现的</font>
+
+### 3.2 Spring整合JPA的原理
+1.问题  
+* Spring是如何创建Repository这个Bean的
+* Spring怎么将动态代理创建为Bean的
+
+2.Spring是如何创建Repository这个Bean的  
+2.1 `@EnableJpaRepositories(basePackages = "com.cnsukidayo.jpa.repository")`指定了该注解  
+2.2 Spring IOC容器启动的时候IOC容器加载,根据"com.cnsukidayo.jpa.repository"去创建Bean
+
+3.如何注册Bean接口  
+
+3.1 BeanDefinition接口,实际上通过xml方式配置Spring,xml中的每一个&lt;bean&gt;标签都会映射为一个BeanDefinition实例,可以通过查看`AbstractBeanDefinition`来获取更多信息,AbstractBeanDefinition类中就定义了很多属性来对应&lt;bean&gt;标签可以指定的属性,例如懒加载、作用域等属性
+
+3.2 通过AbstractBeanDefinition(BeanDefinition)就可以读取到&lt;bean&gt;中定义的beanClass对象,接着通过beanClass对象的newInstance()方法,通过反射的方式来创建Bean对象  
+
+3.3 那么BeanDefinition又是如何创建的,BeanDefinition实际上是通过BeanDefinitionReader来创建的,因为不同的配置方式需要不同的BeanDefinitionReader实现来读取,比如读取xml的实现是`XmlBeanDefinitionReader`,而读取注解的实现是`AnnotatedGenericBeanDefinition`  
+
+所以在`AnnotationConfigApplicationContext`的构造方法中它就创建了一个`AnnotatedBeanDefinitionReader`  
+![AnnotatedBeanDefinitionReader](resource/JPA/16.png)  
+
+3.4 读取到配置之后,下一步就需要进行解析;也就是把读取到的xml中的&lt;bean&gt;或者&lt;component-scan&gt;注解指定的Bean解析为BeanDefinition  
+亦或是把@Bean、@Import、@ComponentScan注解指定的的Bean解析为BeanDefinition  
+
+而@ComponentScan又是通过ComponentScanParser解析类进行解析,在解析之前肯定需要先将@ComponentScan注解指定的Bean扫描(或者读取到),所以又要通过ClassPathBeanDefinitionScanner进行扫描  
+
