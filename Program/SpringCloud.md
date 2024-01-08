@@ -53,6 +53,9 @@ SpringCloud是一套服务的总和
 * 服务网关:`Kong`、`gateway`、Zuul
 * 服务配置:`nacos`、Config
 * 服务总线:`nacos`、Bus
+* 链路追踪:`Zipkin`、`Skywalking`
+* 分布式事务:`Seata`
+* 服务网格:`Istio`
 
 ### 1.5 基本环境搭建
 1.创建父工程  
