@@ -2,7 +2,7 @@
 1.JPA基本概念介绍  
 2.Spring Data JPA  
 3.底层原理  
-3.杂项  
+4.SpringBoot整合Spring Data JPA  
 
 
 
@@ -2073,8 +2073,8 @@ public void testC() {
 ## 3.底层原理
 **目录:**  
 3.1 Repository底层原理  
-3.2 Spring整合JPA的原理  
-
+3.2 手写JPA实现  
+3.3 Spring整合JPA的原理  
 
 ### 3.1 Repository底层原理  
 1.动态代理  
@@ -2159,7 +2159,7 @@ public class JPAProxyTest {
 输出结果:Optional[Customer(customerId=10, customerName=null, customerAddress=null, account=null, messages=[], roles=[Role(id=1, rName=超级管理员), Role(id=2, rName=商品管理员)], createBy=null, modifiedBy=null, dateCreate=null, dateModified=null)]
 
 3.看源码  
-*提示:看源码讲究先看主线、整体;之后再追究细节*  
+*提示:看源码讲究先看主线、整体;之后再追究细节;读取源码要把自已想象成写这段代码的程序员,如果是你你会怎么做?*  
 
 3.1 当调用repository接口的方法时最先会来到`JdkDynamicAopProxy`这个类是AOP的统一处理类,这里会执行该类的`invoke`方法  
 至于为什么JdkDynamicAopProxy会代理repository接口,之后再说  
@@ -2173,7 +2173,7 @@ public class JPAProxyTest {
 最终它会调用`SimpleJpaRepository`类的实现方法,而SimpleJpaRepository类里的这些实现方法都是通过`EntityManager`来实现的  
 所以结论就是JPA的底层实现是通过<font color="#FF00FF">JDK动态代理+EntityManager进行实现的</font>
 
-### 3.2 Spring整合JPA的原理
+### 3.2 手写JPA实现
 1.问题  
 * Spring是如何创建Repository这个Bean的
 * Spring怎么将动态代理创建为Bean的
@@ -2195,6 +2195,348 @@ public class JPAProxyTest {
 
 3.4 读取到配置之后,下一步就需要进行解析;也就是把读取到的xml中的&lt;bean&gt;或者&lt;component-scan&gt;注解指定的Bean解析为BeanDefinition  
 亦或是把@Bean、@Import、@ComponentScan注解指定的的Bean解析为BeanDefinition  
+<font color="#00FF00">把BeanDefinitionReader读取到的配置进行解析实际上是通过ConfigurationClassParser实现的</font>  
+ConfigurationClassParser解析器会解析@Bean、@Import、@ComponentScan注解,对于@ComponentScan注解,它又会让ComponentScanParser解析类去进行解析
 
-而@ComponentScan又是通过ComponentScanParser解析类进行解析,在解析之前肯定需要先将@ComponentScan注解指定的Bean扫描(或者读取到),所以又要通过ClassPathBeanDefinitionScanner进行扫描  
+![解析](resource/JPA/17.png)
+
+ComponentScanParser在解析之前肯定需要先将@ComponentScan注解指定的Bean扫描(或者读取到),所以又要通过ClassPathBeanDefinitionScanner进行扫描  
+
+接着它会扫描被@Component注解修饰的类,并判断该类是不是抽象类或者接口,如果是则不会创建该Bean(因为无法实例化);否则就会把类解析为BeanDefinition(也就是调用下图中的registerBeanDefinition()方法将BeanDefinition进行注册)  
+<font color="#00FF00">所以结论就是ComponentScanParser不会解析被扫描到的接口</font>  
+![获取候选组件](resource/JPA/18.png)
+  
+3.5 整体流程图  
+![整体流程图](resource/JPA/19.png)  
+
+4.自定义扫描器  
+
+4.1 findCandidateComponents
+在上述3.4步最后一张图中被红色方框圈出的代码,它调用了findCandidateComponents方法,由该方法来获取候选组件,进入该方法它会筛选掉当前是抽象类或者接口的类  
+![抽象类](resource/JPA/20.png)
+
+4.2 重写ClassPathBeanDefinitionScanner
+通过重写ClassPathBeanDefinitionScanner中的isCandidateComponent方法将Repository扫描到容器中(重写扫描时的逻辑,原有的逻辑是会跳过接口或抽象类)  
+还是在spring-data-relation模块下创建com.cnsukidayo.jpa.scanner包,然后在该包下创建一个JPAClassPathBeanDefinitionScanner
+```java
+public class JPAClassPathBeanDefinitionScanner extends ClassPathBeanDefinitionScanner {
+    public JPAClassPathBeanDefinitionScanner(BeanDefinitionRegistry registry) {
+        super(registry);
+    }
+
+    @Override
+    protected boolean isCandidateComponent(AnnotatedBeanDefinition beanDefinition) {
+        // 实际上这里严格来说要判断当前接口是不是扩展了Repository接口
+        AnnotationMetadata metadata = beanDefinition.getMetadata();
+        return metadata.isInterface();
+    }
+}
+```
+
+4.3 将自定义扫描器JPAClassPathBeanDefinitionScanner动态注册到Spring中,还是在com.cnsukidayo.jpa.scanner包下创建JPABeanDefinitionRegistryPostProcessor类,通过该类来动态注册扫描器,不影响原有的扫描逻辑  
+BeanDefinitionRegistryPostProcessor:是后置处理器,所以它的生命周期是比较靠后的  
+```java
+@Component
+public class JPABeanDefinitionRegistryPostProcessor implements BeanDefinitionRegistryPostProcessor {
+    @Override
+    public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+        // 动态注册扫描器
+        JPAClassPathBeanDefinitionScanner jpaClassPathBeanDefinitionScanner = new JPAClassPathBeanDefinitionScanner(registry);
+        // 必须实现repository接口
+        jpaClassPathBeanDefinitionScanner.addIncludeFilter(new AssignableTypeFilter(Repository.class));
+        // 扫描路径
+        jpaClassPathBeanDefinitionScanner.scan("com.cnsukidayo.jpa.repository");
+    }
+
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+
+    }
+}
+```
+
+4.4 运行测试  
+首先注释掉SpringDataJPAConfig类上面的@EnableJpaRepositories注解,先不让Spring的自动配置生效  
+接着在SpringDataJPAConfig上添加注解`@ComponentScan(basePackages = "com.cnsukidayo.jpa.scanner")`把自定义扫描器添加到Spring容器中  
+```java
+    @Test
+    public void testS() throws ClassNotFoundException {
+        // 创建Spring容器
+        AnnotationConfigApplicationContext annotationConfigApplicationContext = new AnnotationConfigApplicationContext(SpringDataJPAConfig.class);
+        CustomerRepository customerRepository = annotationConfigApplicationContext.getBean(CustomerRepository.class);
+        Optional<Customer> customer = customerRepository.findById(1L);
+
+    }
+```
+运行结果:
+`nested exception is org.springframework.beans.BeanInstantiationException: Failed to instantiate [com.cnsukidayo.jpa.repository.CustomerRepository]: Specified class is an interface
+`
+**问题:**  
+现在的问题是,虽然已经把接口扫描到容器中,但现在还无法实例化;因为接口无法实例化,所以根据之前的思路使用动态代理,那又如何将动态代理创建为Bean?  
+
+*小结一下流程图:*  
+![流程图](resource/JPA/21.png)
+
+4.5 通过FactoryBean将动态代理创建为Bean  
+```java
+@Component
+public class JPAFactoryBean implements FactoryBean {
+
+    @Autowired
+    private LocalContainerEntityManagerFactoryBean localContainerEntityManagerFactoryBean;
+
+    private Class<?> repositoryInterface;
+
+    public JPAFactoryBean(Class<?> repositoryInterface) {
+        this.repositoryInterface = repositoryInterface;
+    }
+
+    /**
+     * 随意控制实例化过程
+     */
+    @Override
+    public Object getObject() throws Exception {
+        // 这段代码就是之前动态代理的代码
+        EntityManager entityManager = localContainerEntityManagerFactoryBean.createNativeEntityManager(null);
+        ParameterizedType parameterizedType = (ParameterizedType) CustomerRepository.class.getGenericInterfaces()[0];
+        Type type = parameterizedType.getActualTypeArguments()[0];
+        Class<?> aClass = Class.forName(type.getTypeName());
+        return Proxy.newProxyInstance(
+                CustomerRepository.class.getClassLoader(),
+                new Class[]{CustomerRepository.class},
+                new MyJPAProxy(entityManager, aClass)
+        );
+    }
+
+    /**
+     * 该方法的返回值,也就是Spring在实例化一个Bean之前,会先判断该Bean
+     * 的类型与该方法返回的类型是否匹配,如果匹配的话就调用getObject()方法
+     */
+    @Override
+    public Class<?> getObjectType() {
+        return repositoryInterface;
+    }
+}
+```
+
+修改JPAClassPathBeanDefinitionScanner的代理,能够让动态代理创建Bean;并且传入repositoryInterface参数  
+```java
+public class JPAClassPathBeanDefinitionScanner extends ClassPathBeanDefinitionScanner {
+    public JPAClassPathBeanDefinitionScanner(BeanDefinitionRegistry registry) {
+        super(registry);
+    }
+
+    @Override
+    protected boolean isCandidateComponent(AnnotatedBeanDefinition beanDefinition) {
+        AnnotationMetadata metadata = beanDefinition.getMetadata();
+        return metadata.isInterface();
+    }
+
+    @Override
+    protected Set<BeanDefinitionHolder> doScan(String... basePackages) {
+        /*
+        这一步是由JPABeanDefinitionRegistryPostProcessor指示的
+        beanDefinitionHolders就是所有扫描到的repository
+        */
+        Set<BeanDefinitionHolder> beanDefinitionHolders = super.doScan(basePackages);
+        for (BeanDefinitionHolder beanDefinitionHolder : beanDefinitionHolders) {
+            ScannedGenericBeanDefinition beanDefinition = (ScannedGenericBeanDefinition) beanDefinitionHolder.getBeanDefinition();
+            // 得到当前repository的真正类型
+            String beanClassName = beanDefinition.getBeanClassName();
+            // 因为JPAFactoryBean不可能自动注入要动态代理的对象的类型,所以通过构造函数的方式传入
+            beanDefinition.getConstructorArgumentValues().addGenericArgumentValue(beanClassName);
+            // 偷天换日,将实例化repository的工厂改掉 mybatis也是这么做的
+            beanDefinition.setBeanClass(JPAFactoryBean.class);
+        }
+        return beanDefinitionHolders;
+    }
+}
+```
+
+最终结果:  
+![最终结果](resource/JPA/22.png)  
+<font color="#00FF00">成功查询到数据,并且此时任意在repository包下添加任意类型的Repository接口都是可以的</font>  
+
+### 3.3 Spring整合JPA的原理
+1.进入@EnableJpaRepositories注解  
+看到该注解被`@Import(JpaRepositoriesRegistrar.class)`注解修饰,之前在讲SpringBoot自动配置原理的时候提到,每个自动配置注解都有一个与之对应的@Import注解用于导入`@Configuration`  
+
+2.JpaRepositoriesRegistrar  
+该Bean又继承自RepositoryBeanDefinitionRegistrarSupport  
+
+3.RepositoryBeanDefinitionRegistrarSupport  
+RepositoryBeanDefinitionRegistrarSupport类实现了`ImportBeanDefinitionRegistrar`接口,那么它的效果就类似上面讲述的`BeanDefinitionRegistryPostProcessor`接口的作用  
+用于`@Import`注解的动态注册器,那么此时就拥有了动态注册BeanDefinition的能力  
+
+4.RepositoryComponentProvider  
+自定义了RepositoryComponentProvider扫描器,效果就和上述JPAClassPathBeanDefinitionScanner差不多;不过该扫描器是直接重写了`findCandidateComponents()`方法,效果和`doScan()`方法差不太多  
+并且该实现类也重写了`isCandidateComponent()`方法  
+
+5.将扫描到的候选BeanDefinition重写创建BeanDefinition  
+
+6.设置新的BeanDefinition为JpaRepositoryFactoryBean  
+
+7.JpaRepositoryFactoryBean是一个FactoryBean  
+
+8.JpaRepositoryFactoryBean会创建动态代理Bean  
+
+总结一句话就是
+**<font color="#FF00FF">SpringDataJPA的原理是:JDK动态代理+EntityManager+重写BeanDefinition</font>**
+
+
+
+## 4.SpringBoot整合Spring Data JPA  
+**目录:**  
+4.1 SpringBoot整合Spring Data JPA  
+4.2 配置大全  
+4.3 SpringBoot自动配置原理(JPA)  
+
+### 4.1 SpringBoot整合Spring Data JPA
+1.新建模块springboot-jpa  
+
+2.修改pom文件  
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.6.0</version>
+        <relativePath/>
+    </parent>
+
+    <artifactId>springboot-jpa</artifactId>
+
+    <properties>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+
+    <dependencies>
+        <!--JPA 场景启动器-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.22</version>
+            <scope>compile</scope>
+        </dependency>
+
+    </dependencies>
+
+</project>
+```
+3.创建启动类  
+```java
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+```
+4.复制上述的pojo类和repository类  
+这里以Customer为例进行复制即可  
+
+5.编写yml配置文件  
+```yml
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update # 表生成策略
+    show-sql: true # 是否在控制台显示SQL(日志是否记录SQL)
+  datasource:
+    url: jdbc:mysql://192.168.149.131:7901/spring_data_jpa?useSSL=FALSE
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+```
+
+6.创建controller  
+```java
+@RestController
+public class CustomerController {
+
+    private CustomerRepository customerRepository;
+
+    public CustomerController(CustomerRepository customerRepository) {
+        this.customerRepository = customerRepository;
+    }
+
+    @GetMapping("get")
+    public List<Customer> get() {
+        return (List<Customer>) customerRepository.findAll();
+    }
+}
+```
+
+7.测试运行  
+![运行效果](resource/JPA/23.png)  
+
+### 4.2 配置大全  
+```yml
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update # 表生成策略
+      naming:
+        implicit-strategy:
+        #物理命命名策略 一共五种策略
+        # ImplicitNamingStrategyJpaCompliantImpl:默认的命名策略,兼容JPA 2.0的规范
+        # ImplicitNamingStrategyLegacyHbmImpl 兼容Hibernate老版本中的命名规范
+        # ImplicitNamingStrategyLegacyJpaImpl 兼容JPA 1.0规范中的命名规范
+        # ImplicitNamingStrategyComponentPathImpl 大部分与ImplicitNamingStrategyJpaCompliantImpl
+        # 但是对于@Embedded等注解标志的,组件处理是通过使用attributePath完成的
+        # ImplicitNamingStrategyJpaCompliantImpl 默认,上面的四种策略均继承自它
+        physical-strategy:  #隐式的命名策略,当使用@Column和@Table显示指定后改配置无效
+        # PhysicalNamingStrategyStandardImpl 直接映射不做过多处理
+        # SpringPhysicalNamingStrategy 表名,字段为小写,当有大写字母的时候会添加下划线分隔符号
+      use-new-id-generator-mappings:  # 是否为Auto、table、sequence使用hibernate较新的ID生成策略
+
+    show-sql: true # 是否在控制台显示SQL(日志是否记录SQL)
+    generate-ddl: true #表的生成策略(如果是true则会生成,否则不会生成),和ddl-auto这两个二选一使用即可
+    mapping-resources: # 设置JPA的配置文件persistence.xml文件的路径的
+    open-in-view:
+    # 将OpenEntityManagerInViewInterceptor绑定到一个线程,默认是true;
+    # 使用true之后当一个线程进入之后会将session绑定到该线程,则该线程在执行完毕之前都可以拥有session对象
+    properties: #设置JPA框架的各种配置,在这里可以设置hibernate它自已的各种配置
+      hibernate:
+        format_sql: true # 例如格式化SQL
+  datasource:
+    url: jdbc:mysql://192.168.149.131:7901/spring_data_jpa?useSSL=FALSE
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+```
+
+### 4.3 SpringBoot自动配置原理(JPA)
+1.通过@EnableAutoConfiguration  
+*提示:每一个自动配置类都对应一个properties配置类,从yml中读取配置文件*  
+spring-data-jpa有以下自动配置类  
+`JpaBaseConfiguration` => JpaProperties
+`JpaRepositoriesAutoConfiguration`
+
+JpaRepositoriesAutoConfiguration:因为这里我们并没有使用@EnableJpaRepositories注解,所以这个注解的功能实际上是通过该配置类来进行实现的,在这个配置类中通过JpaRepositoriesRegistrar注册了`@EnableJpaRepositories`这个注解  
+
 
