@@ -25,7 +25,7 @@ A.dubbo基本环境搭建
 ### 1.dubbo基本介绍
 1.背景  
 dubbo是一个微服务框架,用于向用户提供`跨进程`的RPC`远程调用`;如下图所示,服务消费者可以通过注册中心(`zookeeper`)感知服务提供者,从而将请求发送给正确的服务提供者.  
-![背景](resource/dubbo/1.png)  
+![背景](resources/dubbo/1.png)  
 
 ### 2.部署dubbo
 1.获取dubbo演示代码  
@@ -69,11 +69,11 @@ docker run \
 -d zookeeper
 ```
 启动成功之后查看docker日志:  
-![zookpeer](resource/dubbo/2.png)  
+![zookpeer](resources/dubbo/2.png)  
 
 4.启动服务提供者  
 在IDEA中点击右侧的Maven,执行`clean->compile`  
-![Maven](resource/dubbo/3.png)  
+![Maven](resources/dubbo/3.png)  
 
 运行1-basic->dubbo-samples-api->provider->application示例启动服务提供者  
 等待控制台出现如下字样则代表启动成功:  
@@ -176,7 +176,7 @@ String message = service.sayHi("dubbo");
 在idea中创建dubbo-springboot-demo根模块,删除根模块的src等信息  
 本次环境一共使用三个模块:`dubbo-spring-boot-demo-interface`、`dubbo-spring-boot-demo-provider`、`dubbo-spring-boot-demo-consumer`;分别是公共模块、服务提供者模块、服务消费者模块.  
 最终的目录结构如下所示:  
-![项目目录结构](resource/dubbo/4.png)  
+![项目目录结构](resources/dubbo/4.png)  
 
 3.修改根模块dubbo-springboot-demo的pom配置文件  
 配置参考如下:  
@@ -326,7 +326,7 @@ dubbo:
     address: zookeeper://${zookeeper.address:127.0.0.1}:2181
 ```
 *注意:可以看到这里的配置使用了${zookeeper.address}这种引用的方式,所以需要对这两个模块启动的配置信息添加`环境变量`,效果如下:*  
-![添加环境变量](resource/dubbo/5.png)  
+![添加环境变量](resources/dubbo/5.png)  
 
 8.创建启动类  
 创建生产者模块的启动类:  
@@ -389,11 +389,11 @@ public class Task implements CommandLineRunner {
 确保环境变量已经添加为Linux系统的IP  
 首先启动生产者模块(dubbo-spring-boot-demo-provider),再启动消费者模块(dubbo-spring-boot-demo-consumer);  
 消费者模块的打印信息如下:  
-![运行效果](resource/dubbo/6.png)  
+![运行效果](resources/dubbo/6.png)  
 
 ### 4.dubbo架构介绍
 1.dubbo的工作原理  
-![工作原理](resource/dubbo/7.png)  
+![工作原理](resources/dubbo/7.png)  
 以上是Dubbo的工作原理图,从抽象架构上分为两层:<font color="#00FF00">服务治理抽象控制面</font>和<font color="#00FF00">Dubbo数据面</font>  
 *提示:在kong中也有类似的数据面和控制面的概念*  
 * 服务治理控制面:  
@@ -408,11 +408,11 @@ public class Task implements CommandLineRunner {
 * Dubbo作为`服务开发框架`约束了微服务定义、开发与调用的规范,定义了服务治理流程及适配模式
 * Dubbo作为`RPC通信协议实现`解决服务间数据传输的编解码问题
 
-![Dubbo的作用](resource/dubbo/8.png)  
+![Dubbo的作用](resources/dubbo/8.png)  
 
 3.服务开发框架  
 微服务的目标是构建足够小的、自包含的、独立演进的、可以随时部署运行的分布式应用程序;Dubbo在微服务应用开发框架之上抽象了一套**RPC服务定义、暴露、调用与治理的编程规范**;从而解决各个微服务模块之间的各种调用问题;说白了就是dubbo就是一个微服务框架.  
-![微服务开发框架](resource/dubbo/9.png)  
+![微服务开发框架](resources/dubbo/9.png)  
 
 Dubbo作为服务开发框架包含的具体内容如下:  
 * RPC服务定义、开发范式:Dubbo支持通过IDL定义服务,也支持编程语言特有的服务开发定义方式,如通过Java Interface定义服务
@@ -422,7 +422,7 @@ Dubbo作为服务开发框架包含的具体内容如下:
 4.通信协议  
 Dubbo从设计上不绑定任何一款特定通信协议,dubbo**支持HTTP/2、REST、gRPC、JsonRPC、Thrift、Hessian2等几乎所有主流的通信协议**.  
 *提示:采用这种多协议的好处是,可以根据场景自由选择不同的协议,提高了灵活性*  
-![通信协议](resource/dubbo/10.png)  
+![通信协议](resources/dubbo/10.png)  
 特点:  
 * dubbo支持协议扩展,dubbo支持将内部私有协议适配到dubbo框架上.  
 * dubbo支持多协议暴露,<font color="#00FF00">可以在单个端口上暴露多个协议</font>;dubbo能够自动识别并确保请求被正确处理;<font color="#00FF00">也可以将同一个RPC服务发布在不同的端口</font>  
@@ -442,7 +442,7 @@ Dubbo从设计上不绑定任何一款特定通信协议,dubbo**支持HTTP/2、R
 
 dubbo抽象了一套微服务治理模式并发布了对应的官方实现,服务治理可帮助简化微服务开发与运维,让开发者更专注在微服务业务本身  
 dubbo服务治理功能:  
-![服务治理功能](resource/dubbo/11.png)  
+![服务治理功能](resources/dubbo/11.png)  
 
 * 地址发现:  
   Dubbo服务发现具备高性能、支持大规模集群、服务级元数据配置等优势,默认提供 Nacos、Zookeeper、Consul等多种注册中心适配,与 Spring Cloud、Kubernetes Service模型打通,支持自定义扩展
@@ -457,15 +457,15 @@ dubbo服务治理功能:
 
 6.dubbo admin  
 Admin dashboard提供了dubbo的集群可视化,通过admin可以来管理dubbo  
-![admin](resource/dubbo/12.png)  
+![admin](resources/dubbo/12.png)  
 
 7.服务网格  
 将Dubbo接入Istio等服务网格治理体系  
-![服务网格](resource/dubbo/13.png)  
+![服务网格](resources/dubbo/13.png)  
 
 ### 5.dubbo与gRPC、Spring Cloud、Istio的关系
 1.dubbo与springcloud  
-![dubbo与springcloud](resource/dubbo/14.png)  
+![dubbo与springcloud](resources/dubbo/14.png)  
 
 共同点:  
 * Dubbo和Spring Cloud<font color="#00FF00">都侧重在对分布式系统中常见问题模式的抽象</font>(如服务发现、负载均衡、动态配置等),同时对每一个问题都提供了配套组件实现,形成了一套微服务整体解决方案,让使用Dubbo及Spring Cloud的用户在开发微服务应用时可以专注在业务逻辑开发上
@@ -499,7 +499,7 @@ Dubbo与gRPC最大的差异在于两者的定位上:
 * Dubbo定位是一款<font color="#00FF00">微服务开发框架</font>,它侧重解决微服务实践从服务定义、开发、通信到治理的问题,因此Dubbo同时提供了RPC通信、与应用开发框架的适配、服务治理等能力
 
 Dubbo服务间可通过多种RPC协议通信并支持灵活切换.因此,可以在Dubbo开发的微服务中选用gRPC通信,Dubbo完全兼容gRPC,并将gRPC设计为内置原生支持的协议之一  
-![gRPC](resource/dubbo/15.png)  
+![gRPC](resources/dubbo/15.png)  
 
 3.dubbo与Istio  
 Service Mesh是近年来在云原生背景下诞生的一种微服务架构,在Kubernetes体系下,让微服务开发中的更多能力如流量拦截、服务治理等下沉并成为基础设施,让微服务开发、升级更轻量.Istio是Service Mesh的开源代表实现,它从部署架构上分为数据面与控制面,从这一点上与Dubbo总体架构是基本一致的,Istio带来的主要变化在于:  
@@ -507,7 +507,7 @@ Service Mesh是近年来在云原生背景下诞生的一种微服务架构,在K
 * 控制面,将之前抽象的服务治理中心聚合为一个具有统一实现的具体组件,并实现了与底层基础设施如Kubernetes无缝适配
 
 Dubbo已经实现了对Istio体系的全面接入,可以用Istio控制面治理Dubbo服务,而在数据面部署架构上,针对Sidecar引入的复杂性与性能问题,Dubbo还支持无代理的Proxyless模式.除此之外,Dubbo Mesh体系还解决了Istio架构落地过程中的很多问题,包括提供更灵活的数据面部署架构、更低的迁移成本等  
-![istio](resource/dubbo/16.png)  
+![istio](resources/dubbo/16.png)  
 
 
 
