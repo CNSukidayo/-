@@ -107,7 +107,7 @@ spring:
         # access-key: 上阿里云时需要使用的云账号
         # secret-key: 上阿里云时需要使用的云账号密码
         # metadata: 元数据,K-V键值对
-        # cluster-name: 集群名称,见之后的教程
+        # cluster-name: 集群名称,如果要部署为多集群时会用到;注意多集群,意思就是还有但集群1.4 nacos集群搭建是单集群,比如分机房这种情况就是多集群
 ```
 
 *注意:*  
@@ -174,6 +174,7 @@ public RestTemplate restTemplate(RestTemplateBuilder builder){
 ### 1.4 nacos集群搭建
 **说明:**  
 nacos集群需要配置三个节点  
+docker启动nacos的配置可以从官网获取:[https://nacos.io/zh-cn/docs/quick-start-docker.html](https://nacos.io/zh-cn/docs/quick-start-docker.html)
 1.更换数据源  
 nacos默认使用的数据库是内嵌的derby数据库,这是一种内存型的数据库;因为现在有三个nacos为了让它们之间的数据同步就需要使用外置的统一的数据源MySQL  
 
