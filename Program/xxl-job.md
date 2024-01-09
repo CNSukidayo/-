@@ -31,15 +31,15 @@
 
 ### 1.2 分布式任务分片原理
 为了能保证多个服务器之间互不干扰,只执行各自自已的任务;所有引入了`分片`  
-![分片](resource/xxl-job/1.png)  
+![分片](resources/xxl-job/1.png)  
 调度中心会把当前接入平台的执行器数量给到具体的执行器(例如这里有3个执行器),然后给每个执行器分配一个具体的分片.  
 例如这里给执行器0的参数,意思是现在有3片分片;你拿到的分片是0.那么执行器0就会去执行0~10000的任务  
 
 架构图:  
-![架构图](resource/xxl-job/2.png)  
+![架构图](resources/xxl-job/2.png)  
 
 ### 1.3 简单上手  
-![模块说明](resource/xxl-job/3.png)  
+![模块说明](resources/xxl-job/3.png)  
 xxl-job各模块说明如下:  
 * xxl-job-admin:平台(springboot)  
 * xxl-job-core:核心包
@@ -59,11 +59,11 @@ server.servlet.context-path=/ # 注意上下文配置后面演示demo时会用�
 
 2.启动xxl-job-admin  
 启动效果如下:  
-![启动效果](resource/xxl-job/4.png)  
+![启动效果](resources/xxl-job/4.png)  
 
 3.什么是任务  
 其实xxl-job中的一个任务也是一个springboot服务,`xxl-job-admin`只是调度中心  
-![xxl-job](resource/xxl-job/5.png)  
+![xxl-job](resources/xxl-job/5.png)  
 通过`@XxlJob`注解来定义一个任务注意这里的值是`demoJobHandler`  
 
 4.修改xxl-job-executor-sample-springboot项目下application.properties的配置  
@@ -80,27 +80,27 @@ xxl.job.executor.appname=xxl-job-executor-sample # 执行器的名称,之后会�
 
 5.新增执行器  
 注意来到`执行器管理`页面执行  
-![新增执行器](resource/xxl-job/6.png)  
+![新增执行器](resources/xxl-job/6.png)  
 这里的APPName实际上就是第四步的yml文件中的`xxl.job.executor.appname`指定的值  
 
 6.启动xxl-job-executor-sample-springboot项目  
 一段时间之后,刷新页面即可看到服务已经注册成功  
-![注册执行器](resource/xxl-job/7.png)  
+![注册执行器](resources/xxl-job/7.png)  
 
 7.新增任务  
 来到任务管理界面,找到刚才的执行器,点击右侧的新增  
-![新增任务](resource/xxl-job/8.png)  
+![新增任务](resources/xxl-job/8.png)  
 
-![新增策略](resource/xxl-job/9.png)  
+![新增策略](resources/xxl-job/9.png)  
 注意`JobHandler`的值就是上面`@XxlJob`注解里面的值  
 
 8.执行任务  
 点击右侧的执行一次,然后再设置任务参数后点击保存  
-![执行任务](resource/xxl-job/10.png)
-![执行任务](resource/xxl-job/11.png)
+![执行任务](resources/xxl-job/10.png)
+![执行任务](resources/xxl-job/11.png)
 
 9.执行结果  
-![执行结果](resource/xxl-job/12.png)  
+![执行结果](resources/xxl-job/12.png)  
 可以看到成功打印出`HelloWorld`  
 这是因为demoJobHandler对应的job代码如下:  
 ```java
