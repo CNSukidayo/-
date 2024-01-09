@@ -17,10 +17,10 @@ A.基本知识介绍
 Kong是一款基于OperResty(Nginx+Lua模块)编写的高可用、易扩展的,由Mashape公司开源的APl Gateway项目.Kong是基于NGINX和Apache Cassandra(`NOSQL`)或PostgreSQL(`关系型数据库`)构建的,能提供易于使用的`RESTful API`来操作和配置API管理系统,所以它可以水平扩展多个Kong服务器,通过前置的负载均衡配置把请求均匀地分发到各个server,来应对大批量的网络请求.  
 
 kong调用示意图:  
-![kong](resource/kong/1.png)  
+![kong](resources/kong/1.png)  
 
 使用网关的好处:  
-![使用网关的好处](resource/kong/2.png)  
+![使用网关的好处](resources/kong/2.png)  
 这是kong官方的一张图,它的好处就是正常网关提供的好处,例如:统一的访问入口、统一的权限校验;把真正独立的业务下沉到各个具体的模块
 
 **Kong主要有三个组件:**  
@@ -36,7 +36,7 @@ Kong采用插件机制进行功能定制,插件集(可以是O或N个)在APl请�
 * 在任何基础架构上运行:Kong网关可以在任何地方都能运行.您可以在云或内部网络环境中部署Kong,包括单个或多个数据中心设置,以及public,private或invite-only APls.
 
 3.Kong架构  
-![Kong架构](resource/kong/3.png)  
+![Kong架构](resources/kong/3.png)  
 
 * Kong核心基于OpenResty构建,实现了请求/响应的Lua处理化
 * Kong插件拦截请求/响应
@@ -92,7 +92,7 @@ postgres:9.6
 * -p:PostgreSQL默认端口为5432
 
 *提示:启动成功之后可以使用Navicat来访问该数据库*  
-![Navicat](resource/kong/4.png)  
+![Navicat](resources/kong/4.png)  
 
 4.初始化数据库&kong  
 *注意:这一步使用的是kong来初始化数据库,因为数据是存储于kong里的,PostgreSQL只是一个支撑数据库*
@@ -182,10 +182,10 @@ pantsel/konga:latest -c prepare -a postgres -u postgres://konga:konga@konga-data
   <font color="#00FF00">用户名:密码@数据库地址:端口/模式(数据库)</font>
 
 **konga的其它参数:**  
-![konga](resource/kong/6.png)  
+![konga](resources/kong/6.png)  
 
 5.执行成功之后使用Navicat连接数据库  
-![Navicat](resource/kong/5.png)  
+![Navicat](resources/kong/5.png)  
 
 6.启动konga  
 ```shell
@@ -205,14 +205,14 @@ pantsel/konga
 7.访问konga  
 浏览器访问:`LinuxIP:1337`  
 第一次进入konga需要注册管理员  
-![注册管理员](resource/kong/7.png)  
+![注册管理员](resources/kong/7.png)  
 * 用户名:admin (随便创建的)
 * 密码:12345678
 
 8.设置kong的地址  
 konga是管理kong的图形界面,自然要配置当前konga管理哪个kong;所以点击左侧的connections然后点击+new connection按钮来创建连接;也可以直接在主页dashboard去创建一个连接.  
 这里的配置大概如下:  
-![设置konga](resource/kong/8.png)  
+![设置konga](resources/kong/8.png)  
 
 
 
@@ -262,22 +262,22 @@ server {
 *关于Kong组件的详细介绍见:<font color="#00FF00">附录=>A.基本知识介绍=>3.Kong的基础对象</font>*
 
 **示意图如下:**  
-![请求架构图](resource/kong/9.png)  
+![请求架构图](resources/kong/9.png)  
 
 3.创建一个upstream  
 这里指定一个名称就可以了  
-![创建upstream](resource/kong/10.png)  
+![创建upstream](resources/kong/10.png)  
 
 4.配置upstream中的target节点  
 <font color="#FF00FF">一个target就相当于一个微服务节点</font>  
 第三步创建完upsteam之后,点击新创建的upstream的detail按钮,点击target->add target按钮即可  
-![添加target](resource/kong/11.png)  
+![添加target](resources/kong/11.png)  
 
 在弹出的界面中配置target信息,配置目标微服务的地址以及权重来实现负载均衡  
-![配置target](resource/kong/12.png) 
+![配置target](resources/kong/12.png) 
 
 **成功后的效果如下:**  
-![配置target成功](resource/kong/13.png)  
+![配置target成功](resources/kong/13.png)  
 
 5.restful风格的好处
 以上配置完全都可以使用restful风格的方式来配置,但或许你会感觉到麻烦?  
@@ -286,7 +286,7 @@ server {
 
 6.配置service  
 *提示:之前说过,service可以对应一个upstream也可以对应一个具体的微服务(target);这里需要让service对应一个upstream,自然要先把upstream配置好再配置service*  
-![配置service](resource/kong/14.png)  
+![配置service](resources/kong/14.png)  
 这里面有三个主要的参数:  
 * name:这是当前service的名称
 * host:这是我们指定当前service与哪个upstream进行绑定,这里指定的就是第3步创建的upstream
@@ -301,13 +301,13 @@ server {
   <font color="#FF00FF">访问网关kong时,统一入口是8000;8001端口是kong的管理地址</font>
 
 7.配置route  
-![配置route](resource/kong/16.png)  
+![配置route](resources/kong/16.png)  
 这里配置了路由的名称以及它对应需要的paths  
 
 ### 2.2 基于Basic Auth&JWT身份认证
 **介绍:**  
 kong本身提供了非常多的插件,这些插件可以辅助kong完成很多事情  
-![kong的插件](resource/kong/17.png)  
+![kong的插件](resources/kong/17.png)  
 总体来说插件的类型分为:**<font color="#FFC800">Authentication(身份认证)、Security(安全)、Traffic Control(流量控制)、Serverless(无服务器计算)、Analytics & Monitoring(分析与监控)、Transformations(变换器)、Logging(日志)、Other(其它)</font>**  
 当然kong也支持编写自定义的插件(按照kong插件编写规范进行编写,使用lua脚本语言)  
 kong中插件的粒度分为四种:<font color="#00FF00">全局 > service > 路由 & consumer</font>  
@@ -321,26 +321,26 @@ kong中插件的粒度分为四种:<font color="#00FF00">全局 > service > 路�
 1.添加route纬度的插件(Basic Auth)  
 点击侧边栏route=>选择2.1节配置的route=>local-product-route=>plugins=>+ Add plugin=>AUTHENTICATION=>basic auth  
 大致效果如下:  
-![配置Basic Auth](resource/kong/18.png)  
+![配置Basic Auth](resources/kong/18.png)  
 *注意:这里会有一个consumer*  
 
 2.配置consumer  
 **介绍:**  
 什么是consumer,可以理解为能够使用kong中service的用户  
 在刚才配置的插件下,可以看到有consumer这一栏显示的是All consumers  
-![consumer](resource/kong/19.png)  
+![consumer](resources/kong/19.png)  
 表明该认证插件允许所有consumer通过  
 点击侧边栏consumer=>+ create consumer=>username指定为fox  
 
 效果如下:  
-![配置consumer](resource/kong/20.png)
+![配置consumer](resources/kong/20.png)
 
 可以在credentials中配置当前消费者的认证信息  
-![消费者](resource/kong/21.png)  
+![消费者](resources/kong/21.png)  
 
 3.Postman进行请求  
 请求的时候进行如下设置即可  
-![postman](resource/kong/22.png)  
+![postman](resources/kong/22.png)  
 
 4.JWT的配置稍微麻烦一点,但大同小异  
 
@@ -361,7 +361,7 @@ Rate Limiting支持三种**计数方式**进行存储:
 - `redis`:存储在Redis数据库,实现集群限流
 
 1.根据自已需要的粒度添加插件=>TRAFFIC CONTROL=>rate limiting  
-![限流插件](resource/kong/23.png)  
+![限流插件](resources/kong/23.png)  
 
 ### 2.4 黑白名单的配置
 **解释:**  
@@ -369,7 +369,7 @@ Rate Limiting支持三种**计数方式**进行存储:
 
 1.配置黑白名单插件  
 Add plugin=>SECURITY=>ip restriction  
-![配置黑白名单](resource/kong/24.png)   
+![配置黑白名单](resources/kong/24.png)   
 
 
 ## 附录:  
@@ -435,7 +435,7 @@ C -->|Two| E[Result 2]
 说白了就是在一个pod中,各个容器之间共享同一个`Network Namespace`,并且可以共享同一个`Volume`(挂载)  
 在这种模式下这些代理功能既不是耦合在应用程序中,也不是集中式的集群部署,而是作为独立进程被部署在应用程序的旁边,即每一个服务器上或<font color="#00FF00">pod</font>中.  
 这样一个服务器上的多个应用程序就能共享这个代理,然后通过<font color="#00FF00">控制平面和数据平面</font>进行统一管理.  
-![Kong](resource/kong/25.png)  
+![Kong](resources/kong/25.png)  
 
 * 控制平面:节点以控制平面的角色运行,会将最新配置信息更新给数据平面的节点  
 * 数据平面:节点以数据平面的角色运行,会从控制平面的节点接受最新的配置信息并提供代理服务.  
