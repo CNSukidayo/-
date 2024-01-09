@@ -19,7 +19,7 @@
 ORM全称Object Relation Mapping;用于解决JDBC访问数据库太麻烦的问题,Mybatis、Hibernate就是ORM框架.  
 java针对ORM提出提出了`JPA`,JPA本质上是一种ORM规范,并不是ORM框架,也就是JPA为了实现ORM这一功能制定了规范,其中Hibernate就是JPA的实现,所以Hibernate拥有ORM功能.  
 application、JPA、JPA实现、JDBC和数据库的关系图:  
-![关系图](resource/JPA/1.png)  
+![关系图](resources/JPA/1.png)  
 
 2.JPA Query和SQL Query的对比  
 * JPA Query:面向JavaBean;代表作hibernate  
@@ -58,7 +58,7 @@ JPA规范提供了如下特性:
 
 4.Spring Data JPA  
 Spring Data JPA是Spring提供的一套简化JPA开发的框架,Spring Data JPA`通过约定好的方法命名规则来编写dao接口`,从而在不写接口实现的情况下实现对数据库的访问和操作.同时Spring Data JPA还提供了很多除了CRUD之外的功能,如分页、排序、复杂查询等  
-![关系图](resource/JPA/2.png)  
+![关系图](resources/JPA/2.png)  
 *相当于Spring Data JPA再在之上包装了一层*  
 
 此外,Spring Data JPA致力于为数据访问(DAO)提供熟悉且一致的编程模板;对于每种持久性存储,dao通常需要为不同存储库提供不同CRUD(增删改查)持久化操作.Spring Data为这些持久性存储以及特定实现提供了通用接口(`CrudRespository、PagingAndSortingRespository`)和模板(`jdbcTemplate、redisTemplate、RestTemplate、MongoTemplate`)  
@@ -76,7 +76,7 @@ Spring Data主要模板(Spring Data支持的持久层技术非常多):
 * Spring Data Elasticsearch:对Elasticsearch实现访问操作
 * Spring Data REST:将Spring Data存储库导出为超媒体驱动的RESTful资源
 
-![spring data jpa](resource/JPA/4.png)  
+![spring data jpa](resources/JPA/4.png)  
 
 
 
@@ -127,7 +127,7 @@ public class User {
 1.创建项目  
 首先创建springdata根项目,在根项目下创建jpa-hibernate作为hibernate的上手项目  
 创建后的模块示意图如下:  
-![模块示意图](resource/JPA/9.png)  
+![模块示意图](resources/JPA/9.png)  
 
 2.修改pom  
 ```xml
@@ -259,7 +259,7 @@ public class Customer {
 **关于SQL方言**  
 方言说白了就是不同的数据库产品有不同的SQL语法规则,所以需要选择方言;这里选择的是MySQL8  
 找到Dialect类,按下`Ctrl+H`查看类继承关系  
-![方言](resource/JPA/5.png)  
+![方言](resources/JPA/5.png)  
 比如这里使用的MySQL就选择MySQL对应的方言,还可以根据不同的引擎选择不同的方言,选择方言实际上就是选择数据库  
 
 5.创建测试类  
@@ -292,7 +292,7 @@ public class HibernateTest {
 ```
 
 运行上述testC方法后成功在数据库中看到插入的数据  
-![结果](resource/JPA/6.png)  
+![结果](resources/JPA/6.png)  
 
 6.更多的示例  
 ```java
@@ -409,7 +409,7 @@ public class JPATest {
 EntityManager说白了就是JPA规范提供的API,就像Connect一样;<font color="#00FF00">只不过真正的实现是hibernate而已</font>.  
 
 运行代码,查看数据库发现数据已经被插入  
-![数据](resource/JPA/7.png)  
+![数据](resources/JPA/7.png)  
 
 *提示:如果需要另外的实现,只需要在persistence.xml配置文件中添加一个新的持久化单元,并且在调用createEntityManagerFactory方法的时候指定对应的name即可*  
 
@@ -462,7 +462,7 @@ Entity的生命周期由EntityManager管理,其生命周期在persistence contex
 * 游离状态(Detached):游离状态就是提交到数据库后,事务commit后实体的状态.因为事务已经提交了,此时实体的属性的任何改变,`都不会同步到数据库`
 
 <font color="#00FF00">对象状态转换图如下:</font>  
-![状态](resource/JPA/3.png)
+![状态](resources/JPA/3.png)
 
 Entity生命周期的四个基本操(CRUD)  
 ```java
@@ -854,7 +854,7 @@ public interface CustomerRepository extends PagingAndSortingRepository<Customer,
 
 #### 2.3.2 规定方法名称
 1.Spring Data JPA的查询约定  
-![约定表](resource/JPA/8.png)
+![约定表](resources/JPA/8.png)
 
 2.方法名的命名规范  
 spring-data-jpa中方法命名主要由两部分组成:  
@@ -1489,7 +1489,7 @@ public class OneToOneTest {
 ```
 
 查看结果,可以看到两条数据都插入到数据库中了  
-![查看结果](resource/JPA/10.png)  
+![查看结果](resources/JPA/10.png)  
 
 6.测试`fetch = FetchType.LAZY`属性  
 
@@ -1668,7 +1668,7 @@ public class OneToManyTest {
 }
 ```
 **执行结果如下:**  
-![一对多](resource/JPA/11.png)  
+![一对多](resources/JPA/11.png)  
 
 5.更多示例  
 ```java
@@ -1881,7 +1881,7 @@ public class ManyToManyTest {
 
 ```
 
-![运行结果](resource/JPA/12.png)  
+![运行结果](resources/JPA/12.png)  
 
 5.更多示例  
 ```java
@@ -2067,7 +2067,7 @@ public void testC() {
 }
 ```
 最终的运行结果如下  
-![最终运行结果](resource/JPA/13.png)  
+![最终运行结果](resources/JPA/13.png)  
 
 
 ## 3.底层原理
@@ -2166,10 +2166,10 @@ public class JPAProxyTest {
 
 3.2 获取目标类  
 之后会执行到`target = targetSource.getTarget();`这段代码,这段代码会获取到当前实现repository接口的目标实现类,也就是`SimpleJpaRepository`类  
-![目标类](resource/JPA/14.png)  
+![目标类](resources/JPA/14.png)  
 
 3.3 SimpleJpaRepository实现  
-![实现](resource/JPA/15.png)  
+![实现](resources/JPA/15.png)  
 最终它会调用`SimpleJpaRepository`类的实现方法,而SimpleJpaRepository类里的这些实现方法都是通过`EntityManager`来实现的  
 所以结论就是JPA的底层实现是通过<font color="#FF00FF">JDK动态代理+EntityManager进行实现的</font>
 
@@ -2191,29 +2191,29 @@ public class JPAProxyTest {
 3.3 那么BeanDefinition又是如何创建的,BeanDefinition实际上是通过BeanDefinitionReader来创建的,因为不同的配置方式需要不同的BeanDefinitionReader实现来读取,比如读取xml的实现是`XmlBeanDefinitionReader`,而读取注解的实现是`AnnotatedGenericBeanDefinition`  
 
 所以在`AnnotationConfigApplicationContext`的构造方法中它就创建了一个`AnnotatedBeanDefinitionReader`  
-![AnnotatedBeanDefinitionReader](resource/JPA/16.png)  
+![AnnotatedBeanDefinitionReader](resources/JPA/16.png)  
 
 3.4 读取到配置之后,下一步就需要进行解析;也就是把读取到的xml中的&lt;bean&gt;或者&lt;component-scan&gt;注解指定的Bean解析为BeanDefinition  
 亦或是把@Bean、@Import、@ComponentScan注解指定的的Bean解析为BeanDefinition  
 <font color="#00FF00">把BeanDefinitionReader读取到的配置进行解析实际上是通过ConfigurationClassParser实现的</font>  
 ConfigurationClassParser解析器会解析@Bean、@Import、@ComponentScan注解,对于@ComponentScan注解,它又会让ComponentScanParser解析类去进行解析
 
-![解析](resource/JPA/17.png)
+![解析](resources/JPA/17.png)
 
 ComponentScanParser在解析之前肯定需要先将@ComponentScan注解指定的Bean扫描(或者读取到),所以又要通过ClassPathBeanDefinitionScanner进行扫描  
 
 接着它会扫描被@Component注解修饰的类,并判断该类是不是抽象类或者接口,如果是则不会创建该Bean(因为无法实例化);否则就会把类解析为BeanDefinition(也就是调用下图中的registerBeanDefinition()方法将BeanDefinition进行注册)  
 <font color="#00FF00">所以结论就是ComponentScanParser不会解析被扫描到的接口</font>  
-![获取候选组件](resource/JPA/18.png)
+![获取候选组件](resources/JPA/18.png)
   
 3.5 整体流程图  
-![整体流程图](resource/JPA/19.png)  
+![整体流程图](resources/JPA/19.png)  
 
 4.自定义扫描器  
 
 4.1 findCandidateComponents
 在上述3.4步最后一张图中被红色方框圈出的代码,它调用了findCandidateComponents方法,由该方法来获取候选组件,进入该方法它会筛选掉当前是抽象类或者接口的类  
-![抽象类](resource/JPA/20.png)
+![抽象类](resources/JPA/20.png)
 
 4.2 重写ClassPathBeanDefinitionScanner
 通过重写ClassPathBeanDefinitionScanner中的isCandidateComponent方法将Repository扫描到容器中(重写扫描时的逻辑,原有的逻辑是会跳过接口或抽象类)  
