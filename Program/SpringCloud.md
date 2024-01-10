@@ -1,5 +1,7 @@
 # 目录  
 1.服务注册中心  
+2.负载均衡器  
+3.远程调用  
 
 
 **附录:**  
@@ -359,6 +361,310 @@ spring:
 ![nacos](resources/springcloud/17.png)  
 
 
+## 2.负载均衡器
+**目录**  
+2.1 负载均衡的基本介绍  
+2.2 Ribbon的使用方式  
+2.3 Ribbon负载均衡策略  
+2.4 LoadBalancer使用方式  
+
+
+
+
+### 2.1 负载均衡的基本介绍
+1.解决方案  
+目前负载均衡分为两种解决方案:服务端负载均衡、客户端负载均衡  
+* 服务端负载均衡:又分为硬件负载均衡(如F5)和软件负载均衡(如nginx)  
+  * 硬件负载均衡:当一个服务调用另外一个服务发送请求时,因为流量最终肯定要走交换机,所以直接通过硬件交换机做负载均衡
+  * 软件负载均衡:在服务消费者和服务提供者中间增加一层nginx服务器来做负载均衡
+
+  <font color="#00FF00">区别:</font>硬件性能更好,但需要额外的成本,软件性能稍低但便宜
+* 客户端负载均衡:直接在服务消费者端做负载均衡,通过获取目标服务列表在远程调用的时候通过代码来控制负载均衡
+
+2.Ribbon  
+`Ribbon`就是客户端的负载均衡,通过`LoadBalancer`获取到服务提供的所有机器实例,Ribbon会自动基于某种规则(轮询、随机、自定义)去调用这些服务
+
+3.常见负载均衡算法  
+* 轮询:负载均衡的默认实现方式,轮询调用目标服务
+* 随机:随机调用目标服务
+* 加权轮询:按照权重对目标服务进行调用
+* 地址hash:对客户端请求的IP地址进行hash取模调用;这种调用方式的特点是,在服务器不动态扩缩容的情况下,同一个IP发出的所有请求的调用链是一致的
+* 最小链接数:即使请求均衡了,但是压力不一定均衡;最小连接数就是根据服务器的情况(如请求积压等参数)将请求分配到压力最小的服务器上
+
+### 2.2 Ribbon的使用方式
+1.使用方式  
+实际上在1.2 nacos基本环境搭建 =>第6步服务调用就是Ribbon的负载均衡器使用案例  
+注意配置`@LoadBalanced`注解
+nacos默认是支持Ribbon的,所以<font color="#00FF00">引入nacos依赖的时候会自动依赖ribbon</font>
+
+### 2.3 Ribbon负载均衡策略
+1.IRule接口  
+![负载均衡策略](resources/springcloud/18.png)  
+*解释:所有的负载均衡策略都实现了IRule接口,它的每一种实现类都是一种负载均衡策略;choose是该接口最重要的方法,用来选择一个服务实例*  
+
+AbstractLoadBalancerRule:抽象类,该抽象类主要定义了一个ILoadBalancer,这里定义它的主要目的是<font color="#00FF00">辅助负载均衡策略选取合适的服务端实例</font>
+
+2.实现类详解  
+* RandomRule:随机
+* RoundRobinRule:轮询;通过一个计数器每次调用时都会增加1,将计数器的结果取模服务总数得到调用的实例下标
+* RetryRule:在轮询的基础上增加**重试**功能,在调用时还是轮询获取服务,如果不能获取服务则会有一个重试的过程,重试时会依次轮询获取下一个服务,如果在deadline时间到来之前还没有获取到有效服务则会返回null
+* WeightResponseTimeRule:这种策略会根据每一个实例的运行情况来计算出实例的**权重**,该策略内部有一个定时器,该定时器会每隔30s计算一次各个服务的实例,计算规则,<font color="#00FF00">如果一个服务的响应时间越短则权重越大</font>
+* NacosRule:根据服务在nacos中配置的权重来进行负载均衡;服务在nacos中配置权重的方式见:1.3 nacos界面说明
+* ClientConfigEnableRoundRobinRule:该策略类似RoundRobinRule
+* BestAvaliable:继承自ClientConfigEnableRoundRobinRule;该策略会根据LoadBalancedStats中保存的服务实例的状态信息来<font color="#00FF00">过滤掉失效的服务实例,顺便找出并发请求最小的服务实例进行使用</font>;然而LoadBalancedStats有可能会null,如果为null时会退化为ClientConfigEnableRoundRobinRule策略
+* ZoneAvoidanceRule:负载均衡默认规则(轮询),间接继承ClientConfigEnableRoundRobinRule;但该实现类增加了区域选择功能,假设现在服务消费者在北京,两个服务提供者一个在天津一个在上海,则最终肯定是调用在天津的服务提供者;并且每次都是调用天津的服务提供者,如果没有区域则会退化为负载均衡策略
+* AvaliablityFilteringRule:先过滤掉故障实例再选择并发较小的实例
+
+3.修改默认的负载均衡策略  
+修改默认的负载均衡策略有两种方式:配置类、yml配置文件
+
+3.1 通过配置类修改负载均衡策略
+通过编写配置类,向容器中添加IRule实现类即可  
+```java
+@Configuration
+public class RibbonConfig {
+    public IRule iRule() {
+        // 使用nacos负载均衡策略
+        return new NacosRule();
+    }
+}
+```
+
+<font color="#00FF00">还可以针对不同服务提供方使用不同的负载均衡策略</font>  
+
+```java
+@SpringBootApplication
+@RibbonClients(value = {
+        @RibbonClient(name = "mall-order",configuration = RibbonConfig.class),
+        @RibbonClient(name = "mall-account",configuration = RibbonConfig.class)
+})
+public class OrderApplication {
+    @LoadBalanced
+    public static void main(String[] args) {
+        SpringApplication.run(OrderApplication.class, args);
+    }
+}
+```
+这里就对mall-order和mall-account服务提供方配置了具体的负载均衡策略,如果不配置默认就是对所有的服务提供方都使用上述RibbonConfig类配置的负载均衡策略  
+
+**注意:** 这里有个坑,这个RibbonConfig不能被@ComponentScan注解扫描到;所以这里我修改了一下目录结构,将RibbonConfig类放到了启动类的父包的同级包下;如果该配置类能够被扫描到,则<font color="#FF00FF">会将所有服务提供方的负载均衡策略都设置为该配置类里的负载均衡策略</font>  
+![配置类](resources/springcloud/19.png)  
+
+3.2 通过配置类修改负载均衡策略
+```yml
+服务提供者名称:
+  ribbon:
+    NFLoadBalancerRuleClassName: 负载均衡策略的全限定名
+```
+例如:
+```yml
+service-stock:
+  ribbon:
+    NFLoadBalancerRuleClassName: com.alibaba.cloud.nacos.ribbon.NacosRule
+```
+这里就设置了调用目标服务service-stock时使用nacos的负载均衡策略
+
+4.实现自定义负载均衡策略  
+```java
+public class CustomRule extends AbstractLoadBalancerRule {
+    @Override
+    public void initWithNiwsConfig(IClientConfig iClientConfig) {
+
+    }
+
+    @Override
+    public Server choose(Object o) {
+        // 获取当前服务列表
+        ILoadBalancer loadBalancer = this.getLoadBalancer();
+        List<Server> reachableServers = loadBalancer.getReachableServers();
+        // 随机获取一个实例
+        int random = ThreadLocalRandom.current().nextInt(reachableServers.size());
+
+        return reachableServers.get(random);
+    }
+}
+```
+<font color="#00FF00">使用第三步将的方式来使用当前这个负载均衡策略即可</font>
+
+5.立即加载  
+*解释:默认所有的负载均衡器都是懒加载的,那么当服务第一次远程调用时有可能会卡顿甚至超时,所以可以将负载均衡器设置为立即加载*  
+修改yml配置文件  
+```yml
+ribbon:
+  eager-load:
+    # 开启ribbon立即加载
+    enabled: true
+    # 还可以再这里配置哪些服务是需要立即加载的;这里配置mall-order服务的负载均衡器是立即加载
+    # 多个配置用逗号,隔开;如果不配置则所有服务都是立即加载
+    # clients: mall-order
+```
+
+### 2.4 LoadBalancer使用方式
+Ribbon是nacos默认的负载均衡器,本节介绍LoadBalancer这个负载均衡器  
+1.LoadBalancer提供两种负载均衡客户端  
+* RestTemplate:基于HTTP的远程调用
+* WebClient:基于WebFlux的远程调用(注意现在还没有讲OpenFeign,之前使用远程调用时一直是基于RestTemplate的),LoadBalancer支持使用响应式编程的方式进行远程调用
+
+2.排除nacos中对ribbon的依赖  
+*提示:高版本可能不需要排除,高版本nacos默认不再依赖ribbon*  
+```xml
+<!--服务注册发现-->
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!--服务注册发现-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        <exclusions>
+            <exclusion>
+                <!--将ribbon排除-->
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-starter-netflix-ribbon</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+
+    <!--添加LoadBalancer依赖-->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+    </dependency>
+
+</dependencies>
+```
+
+3.修改yml配置文件  
+```yml
+spring:
+  cloud:
+    loadbalancer:
+      retry:
+        # 启用loadbalancer
+        enabled: true
+```
+
+4.自定义负载均衡策略  
+和之前大同小异,需要往容器中添加ReactorLoadBalancer的实现类  
+接着使用`@LoadBalancerClients`注解来针对某个服务提供者使用特定的负载均衡策略(类似之前@RibbonClients)  
+只不过loadbalancer没有提供配置文件的方式来自定义负载均衡策略  
+
+## 3.远程调用
+**目录:**  
+3.1 Feign基本环境搭建  
+
+
+### 3.1 Feign基本环境搭建
+1.Feign基本介绍  
+Feign是开放的声明式、模板化的HTTP客户端;Feign就是远程调用组件,Feign支持自带的注解以及JAX-RS注解等  
+OpenFeign对Feign做了增强,使其支持SpringMVC注解,并且OpenFeign还整合了Ribbon和Nacos;所以OpenFeign没有支持LoadBalancer,OpenFeign不支持异步调用
+
+2.OpenFeign基本环境搭建  
+2.1 创建新模块order-openfeign  
+
+2.2 修改pom文件,添加OpenFeign依赖
+```xml
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-openfeign</artifactId>
+</dependency>
+```
+
+2.3 添加主启动类  
+在项目下创建io.github.cnsukidayo.cloud.order包,在该包下创建OrderApplication主启动类  
+```java
+@SpringBootApplication
+@EnableFeignClients
+public class OrderApplication {
+    @LoadBalanced
+    public static void main(String[] args) {
+        SpringApplication.run(OrderApplication.class, args);
+    }
+}
+```
+
+2.4 编写yml文件  
+这里就不用nacos集群环境了(别忘了service-stock模块的yml也要修改nacos地址)  
+```yml
+server:
+  port: 8081
+spring:
+  application:
+    name: service-order
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.149.130:8870
+        username: nacos
+        password: nacos
+        namespace: public
+```
+
+2.5 完善service-stock模块中的接口  
+在该模块的io.github.cnsukidayo.cloud.stock包下创建api包单独作为本模块对外提供的接口;在该包下创建StockController类  
+```java
+@RestController()
+@RequestMapping("/api/stock/inner")
+public class StockController {
+
+    @Value("${server.port}")
+    private String port;
+
+    @GetMapping("reduce")
+    public String reduce() {
+        return "扣减库存" + port;
+    }
+
+}
+```
+
+2.6 编写远程调用接口  
+在io.github.cnsukidayo.cloud.order包下创建feign包,该包用于存放OpenFeign远程调用的接口;这里为了方便就没有单独建一个模块放这些远程调用接口  
+在该包下创建StockFeignService接口  
+```java
+@FeignClient(name = "service-stock", path = "/api/stock/inner")
+public interface StockFeignService {
+
+    @GetMapping("reduce")
+    String reduce();
+}
+```
+`@FeignClient`  
+* name:目标服务的名称(服务提供者的名称)
+* path:远程调用的前缀(这里正好和StockController接口对应上)
+
+<font color="#FF00FF">所以这里的实现和JPA很类似,都是使用动态代理完成的;</font>
+
+2.7 编写服务消费者接口  
+在order-openfeign模块中创建controller包,在该包下创建OrderController  
+```java
+@RestController
+@RequestMapping("/api/order")
+public class OrderController {
+
+    private final StockFeignService stockFeignService;
+
+    public OrderController(StockFeignService stockFeignService) {
+        this.stockFeignService = stockFeignService;
+    }
+
+    @GetMapping("add")
+    public String add() {
+        return stockFeignService.reduce();
+    }
+
+}
+```
+
+2.8 测试运行  
+访问地址[http://localhost:8081/api/order/add](http://localhost:8081/api/order/add)成功显示扣减库存8082  
+并且OpenFeign也是默认支持负载均衡的  
+
+
+
 
 
 
@@ -422,7 +728,8 @@ SOA使用治理中心ESB,ESB会管理所有的服务(模块),每个服务都需�
 ### 1.4 组件说明  
 排名分先后顺序  
 * 服务注册中心:`zookpeer`、`nacos`、consul、eureak
-* 服务调用:`Dubbo`、`OpenFeign`、Ribbon、LoadBalancer、Feign
+* 服务调用:`Dubbo`、`OpenFeign`、Feign
+* 负载均衡:`Ribbon`、LoadBalancer
 * 服务降级:`Sentinel`、Resilience4j、Hystrix
 * 服务网关:`Kong`、`gateway`、Zuul
 * 服务配置:`nacos`、Config
