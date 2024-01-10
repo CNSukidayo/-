@@ -176,8 +176,186 @@ public RestTemplate restTemplate(RestTemplateBuilder builder){
 nacos集群需要配置三个节点  
 1.更换数据源  
 nacos默认使用的数据库是内嵌的derby数据库,这是一种内存型的数据库;因为现在有三个nacos为了让它们之间的数据同步就需要使用外置的统一的数据源MySQL  
+使用docker创建MySQL数据源;这里创建最普通的MySQL即可,详情参考docker创建MySQL  
+
+**使用Navicat连接数据库**  
+使用Navicat连接数据库并创建nacos数据库,在该数据库下运行nacos官方提供的建表SQL;
+这个建表语句一般可以进入nacos容器后在conf目录下找到scheme.sql(可以先创建一个nacos然后拿到该版本的SQL建表语句之后再删除该nacos)  
+也可以访问 [https://github.com/alibaba/nacos/blob/master/distribution/conf/mysql-schema.sql](https://github.com/alibaba/nacos/blob/master/distribution/conf/mysql-schema.sql)来获取[SQL建表语句](resources/springcloud/mysql-schema.sql)  
+
+**运行后效果如下图所示:**  
+![运行效果](resources/springcloud/12.png)  
+
+2.创建nacos集群  
+**nacos1:**  
+```shell
+docker run \
+-p 8870:8848 \
+-p 9880:9848 \
+-p 9890:9849 \
+--name nacos1 \
+-e PREFER_HOST_MODE=ip \
+-e MODE=cluster  \
+-e NACOS_SERVERS="192.168.149.130:8871 192.168.149.130:8872" \
+-e SPRING_DATASOURCE_PLATFORM=mysql \
+-e MYSQL_SERVICE_HOST=192.168.149.130 \
+-e MYSQL_SERVICE_PORT=7901 \
+-e MYSQL_SERVICE_DB_NAME=nacos \
+-e MYSQL_SERVICE_USER=root \
+-e MYSQL_SERVICE_PASSWORD=root \
+-e NACOS_AUTH_TOKEN_EXPIRE_SECONDS=18000 \
+-e JVM_XMS=256m \
+-e JVM_XMX=256m \
+-e NACOS_SERVER_IP=192.168.149.130 \
+-d nacos/nacos-server:v1.4.3
+```
+**解释:**  
+* 这里192.168.149.130是虚拟机的IP,宿主机的IP;用于连接MySQL使用
+* `MODE=cluster` 模式选择集群
+* `NACOS_SERVERS = "192.168.149.130:8871 192.168.149.130:8872"` 另外两个集群的IP地址和端口
+* `SPRING_DATASOURCE_PLATFORM=msyql` 使用的数据库为MySQL
+* `MYSQL_SERVICE_HOST=192.168.149.130` 数据库的IP
+* `MYSQL_SERVICE_PORT=7901` 数据库的端口
+* `MYSQL_SERVICE_DB_NAME=nacos` 使用那个库作为nacos的数据库
+* `MYSQL_SERVICE_USER=root` 连接数据库的用户名
+* `MYSQL_SERVICE_PASSWORD=root` 连接数据库的密码
+* `NACOS_SERVER_IP=192.168.149.130` 当前nacos服务器的IP,真实的生产环境中该IP就填Linux主机的IP即可;这里是填写的虚拟机IP
+
+此时进入nacos集群管理页面,可以看到集群配置已经生效,效果如下:  
+![nacos集群](resources/springcloud/13.png)
+*只不过这里另外两台集群还没有上线所以是红色的*  
+
+**nacos2:**
+```shell
+docker run \
+-p 8871:8848 \
+-p 9881:9848 \
+-p 9891:9849 \
+--name nacos2 \
+-e PREFER_HOST_MODE=ip \
+-e MODE=cluster  \
+-e NACOS_SERVERS="192.168.149.130:8870 192.168.149.130:8872" \
+-e SPRING_DATASOURCE_PLATFORM=mysql \
+-e MYSQL_SERVICE_HOST=192.168.149.130 \
+-e MYSQL_SERVICE_PORT=7901 \
+-e MYSQL_SERVICE_DB_NAME=nacos \
+-e MYSQL_SERVICE_USER=root \
+-e MYSQL_SERVICE_PASSWORD=root \
+-e NACOS_AUTH_TOKEN_EXPIRE_SECONDS=18000 \
+-e JVM_XMS=256m \
+-e JVM_XMX=256m \
+-e NACOS_SERVER_IP=192.168.149.130 \
+-d nacos/nacos-server:v1.4.3
+```
+
+**nacos3:**  
+```shell
+docker run \
+-p 8872:8848 \
+-p 9882:9848 \
+-p 9892:9849 \
+--name nacos3 \
+-e PREFER_HOST_MODE=ip \
+-e MODE=cluster  \
+-e NACOS_SERVERS="192.168.149.130:8870 192.168.149.130:8871" \
+-e SPRING_DATASOURCE_PLATFORM=mysql \
+-e MYSQL_SERVICE_HOST=192.168.149.130 \
+-e MYSQL_SERVICE_PORT=7901 \
+-e MYSQL_SERVICE_DB_NAME=nacos \
+-e MYSQL_SERVICE_USER=root \
+-e MYSQL_SERVICE_PASSWORD=root \
+-e NACOS_AUTH_TOKEN_EXPIRE_SECONDS=18000 \
+-e JVM_XMS=256m \
+-e JVM_XMX=256m \
+-e NACOS_SERVER_IP=192.168.149.130 \
+-d nacos/nacos-server:v1.4.3
+```
+
+**最终效果如下:**  
+![最终效果如下](resources/springcloud/14.png)  
+*注意:这里的第一个IP的端口显示的是有点问题的,因为第一个默认是当前节点的在docker内部的IP和端口;IP已经通过NACOS_SERVER_IP修改为Linux宿主机IP了,但是端口是改不掉的(除非修改启动nacos的端口),不过只要注意NACOS_SERVERS填写不错误就行了*  
+另外如果此时进入容器,查看<font color="#00FF00">cluster.conf</font>文件的内容就是我们配置的集群内容了:  
+![配置](resources/springcloud/15.png)
+
+3.配置NGINX  
+*需求:配置NGINX使用反向代理负载均衡流量到三台nacos服务器上*  
+
+3.1 拉取镜像  
+`docker pull nginx`  
+
+3.2 直接先启动(为了拷贝配置文件)  
+*提示:有的时候docker挂载配置文件,启动容器后会提示找不到conf,这是因为这种镜像在启动的时候并没有同步配置文件;那么一种解决方案就是先启动一个容器,把容器中的配置文件拷贝出来,然后把该容器删掉;之后再启动一次并且设置挂载*  
+```shell
+docker run \
+-p 80:80 \
+--name nginx \
+-d nginx
+```
+
+3.3 拷贝文件  
+```shell
+mkdir {~/software/nginx,~/software/nginx/html,~/software/nginx/logs}
+# 把containerID替换为你的NGINX镜像id
+docker container cp [containerID]:/etc/nginx ~/software/nginx/conf/
+```
+
+3.4 停止容器删除容器  
+```shell
+docker stop [containerID]
+docker rm [containerID]
+```
+
+3.5 启动nginx  
+```shell
+docker run -p 9001:80 --name nginx \
+-v ~/software/nginx/html:/usr/share/nginx/html \
+-v ~/software/nginx/logs:/var/log/nginx \
+-v ~/software/nginx/conf:/etc/nginx \
+-d nginx
+```
+
+此时访问`LinuxIP:9001`就能够看到nginx的响应信息了  
 
 
+3.6 配置nacos负载均衡  
+```shell
+# 备份nginx配置文件
+cp ~/software/nginx/conf/conf.d/default.conf ~/software/nginx/conf/conf.d/default_backup.conf
+# 编辑nginx配置文件
+vim ~/software/nginx/conf/conf.d/default.conf
+```
+**在配置文件中添加如下内容:**  
+```shell
+# 添加nacos集群的地址
+upstream nacoscluster {
+    server 192.168.149.130:8870 weight=1;
+    server 192.168.149.130:8871 weight=1;
+    server 192.168.149.130:8872 weight=1;
+}
+
+server{
+  # something
+  location /nacos/{
+    proxy_pass http://nacoscluster/nacos/;
+  }
+}
+
+```
+
+3.7 重启nginx  
+![集群搭建成功](resources/springcloud/16.png)  
+集群搭建成功  
+
+3.8 将微服务注册中心的地址改为nginx地址  
+```yml
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.149.130:9001
+```
+再次查看nacos情况,成功注册  
+![nacos](resources/springcloud/17.png)  
 
 
 
