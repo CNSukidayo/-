@@ -3,6 +3,7 @@
 2.负载均衡器  
 3.远程调用  
 4.服务配置中心  
+5.服务降级  
 
 
 **附录:**  
@@ -854,6 +855,610 @@ feign:
 4.克隆  
 还可以针对配置文件进行克隆
 ![克隆](resources/springcloud/23.png)  
+
+
+
+## 5.服务降级
+**目录:**  
+5.1 服务降级基本环境搭建  
+5.2 Sentinel上手体验  
+5.3 Sentinel控制台  
+
+
+### 5.1 服务降级基本环境搭建
+1.分布式系统可用性问题  
+在分布式系统中,如果系统遇到激增流量、被其它服务拖垮、异常未处理等情况时很有可能会导致服务可用性降低;说白了就是<font color="#FF00FF">缺乏高可用防护/容错机制尤其是针对流量的保护</font>  
+所以在分布式系统中如果不进行容错机制的处理,很有可能造成<font color="#00FF00">服务雪崩</font>(见1.1 微服务基本概念介绍=>4.SOA)
+
+2.常见服务不可用的原因  
+* 激增流量导致系统CPU飚高,无法正常处理请求
+* 激增流量打垮冷系统(数据库连接未创建,缓存未预热)
+* 消息投递速度过快,导致消息处理积压
+* 慢SQL查询卡爆连接池
+* 第三方服务不响应,卡满连接池
+* 业务调用持续出现异常
+
+3.服务雪崩样例图  
+![服务雪崩](resources/springcloud/40.png)  
+假设图中积分服务能承受的压力较小,当大量请求来到秒杀商品这条调用链时,最终会将积分服务打垮,从而导致大量的请求积压在商品服务;最终导致整个秒杀商品不可用  
+然而由于<font color="#00FF00">商品服务是别的服务的共享服务</font>最终会导致服务雪崩  
+<font color="#FF00FF">服务雪崩:因服务提供者不可用导致服务调用者的不可用,并将不可用逐渐放大的过程就叫服务雪崩效应</font>  
+
+4.常见的容错机制  
+* 超时机制:原本服务提供者不可用会导致消费者请求强制等待,从而造成系统资源耗尽;加入超时机制,一旦超时就释放资源;这种方式一定程度上可以抑制资源耗尽的问题
+  <font color="#00FF00">可以在OpenFeign的配置文件使用connectTimeout、readTimeout属性设置超时时间</font>
+* 服务限流:一般会提前对服务进行压力测试,之后线上就会使用该压测数据对服务进行限流
+* 线程池隔离:该效果类似限流,用户的请求将不再直接访问服务,而是通过线程池中的空闲线程来访问服务,<font color="#00FF00">如果线程池已满则会进行降级处理</font>,用户的请求不会被阻塞,可以立即看到一个结果(如友好的提示信息)
+* <font color="#FF00FF">服务熔断</font>:熔断这个概念起源于股市或者电力系统中的保险丝,说白了就是防止流量(电量)太大从而烧毁整个系统
+  但在分布式系统中如果调用一个服务屡次出现响应失败的情况,<font color="#00FF00">可以直接熔断该服务后续就不调用该服务</font>,它对比超时机制而言是不会再去调用服务的
+  熔断一般会给目标服务设置阈值,例如十分钟供目标服务进行修复,如果修复成功就恢复使用不成功就继续熔断,<font color="#00FF00">在熔断期间必须要进行服务降级(服务熔断必服务降级)</font>
+  服务降级说白了就是一个兜底的方法,当服务被熔断后服务将不再被调用,此时服务消费者需要准备一个本地的回调,<font color="#00FF00">快速返回一个缺省值</font>.例如使用<font color="#00FF00">备用接口、缓存、mock数据</font>等.不过这种使用方式也要看场景
+  根据服务的性质还可以把服务分为强依赖和弱依赖
+  * 弱依赖:例如这里的积分服务就是弱依赖,在秒杀商品这个功能里;就算积分服务挂掉了,它也不影响整个库存、订单、商品的调用链;实际上可以对该服务做降级处理,记录当前下单商品的id这条日志;后续采用调度通过该日志信息做<font color="#FF00FF">补偿</font>
+  * 强依赖:例如这里的订单库存服务宕机后显然整个秒杀服务都不可用了
+
+  <font color="#00FF00">所以降级一般会在弱依赖中进行实现</font>
+
+5.Sentinel组件  
+Sentinel组件是阿里巴巴开源的面向分布式微服务架构的高可用防护组件,是一个被广泛验证的组件  
+Sentinel以流量为切入点,提供了<font color="#00FF00">限流、流量整形、熔断降级、系统负载保护、热点防护</font>等多个维度的防护手段  
+Sentinel的高级版本-><font color="#FF00FF">AHAS(收费)</font>
+<font color="#00FF00">可以对Sentinel组件进行扩展(高级部分)</font>
+Sentinel由核心库与DashBoard组成,核心库是不依赖于DashBoard的;
+
+### 5.2 Sentinel上手体验
+**目录:**  
+5.2.1 Java代码方式使用Sentinel  
+5.2.2 @SentinelResource注解  
+5.2.3 代码设置熔断规则  
+
+#### 5.2.1 Java代码方式使用Sentinel
+1.新建sentinel-demo模块  
+
+2.修改pom文件
+*提示:这里没有整合SpringcloudAlibab,只使用Sentinel核心库是可以不与springcloud整合的,因为Sentinel本质是基于接口进行限流的*
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.3.11.RELEASE</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.github.cnsukidayo</groupId>
+    <artifactId>sentinel-demo</artifactId>
+
+    <properties>
+        <maven.compiler.source>9</maven.compiler.source>
+        <maven.compiler.target>9</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--sentinel核心库-->
+        <dependency>
+            <groupId>com.alibaba.csp</groupId>
+            <artifactId>sentinel-core</artifactId>
+            <version>1.8.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.18</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.alibaba.csp</groupId>
+            <artifactId>sentinel-annotation-aspectj</artifactId>
+            <version>1.8.0</version>
+        </dependency>
+
+    </dependencies>
+
+</project>
+```
+
+3.写yml  
+```yml
+server:
+  port: 8080
+```
+
+4.主启动类  
+```java
+@SpringBootApplication
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+```
+
+5.controller  
+```java
+@RestController
+@RequestMapping("/sentinel")
+@Slf4j
+public class HelloController {
+
+    public static final String RESOURCE_NAME = "hello";
+    public static final String USER_RESOURCE_NAME = "user";
+    public static final String DEGRADE_RESOURCE_NAME = "degrade";
+
+    @RequestMapping(value = "hello")
+    public String hello() {
+        Entry entry = null;
+        try {
+            // 定义资源名称,通常与接口请求地址一致
+            entry = SphU.entry(RESOURCE_NAME);
+            String str = "hello world";
+            log.info("============" + str + "===========");
+            return str;
+        } catch (BlockException e) {
+            log.info("block");
+            return "被流控了!";
+        } catch (Exception exception) {
+            // 若需要配置降级规则,需要使用这种方式记录业务异常
+            Tracer.traceEntry(exception, entry);
+        } finally {
+            if (entry != null) {
+                entry.exit();
+            }
+        }
+
+        return null;
+    }
+
+    // 初始化方法
+    @PostConstruct
+    private static void initFlowRules() {
+        // 流控规则集合
+        List<FlowRule> rules = new ArrayList<>();
+
+        // 一个FlowRule就是一个流控规则
+        FlowRule rule = new FlowRule();
+        /*
+        为哪个资源进行流控的规则限制
+        这里就和上面controller中的方法对应起来了
+        表明当前rule是针对上述RESOURCE_NAME的规则进行限制的,谁用了这个资源就会被该规则流控
+         */
+        rule0.setResource(RESOURCE_NAME);
+        // 设置流控规则为QPS(实际上还有很多规则可以参考官方文档)
+        rule.setGrade(RuleConstant.FLOW_GRADE_QPS);
+        // 设置受保护的阈值,每秒只有一次
+        rule.setCount(1);
+        rules.add(rule);
+        // 加载配置好的规则
+        FlowRuleManager.loadRules(rules);
+    }
+}
+```
+
+6.启动测试  
+一旦访问量超过1/s则会被流控
+
+#### 5.2.2 @SentinelResource注解
+**痛点:**  
+5.2.1的写法代码侵入性太强,每一个controller都需要这么编写;解决方法是使用@SentinelResource注解  
+
+1.创建配置文件添加SentinelResourceAspect  
+```java
+@Configuration
+public class SentinelConfig {
+
+    @Bean
+    public SentinelResourceAspect sentinelResourceAspect(){
+        return new SentinelResourceAspect();
+    }
+}
+```
+
+2.编写controller  
+```java
+@RestController
+@RequestMapping("/sentinel")
+@Slf4j
+public class HelloController {
+
+
+    public static final String RESOURCE_NAME = "hello";
+    public static final String USER_RESOURCE_NAME = "user";
+    public static final String DEGRADE_RESOURCE_NAME = "degrade";
+
+    @RequestMapping(value = "hello")
+    public String hello() {
+        Entry entry = null;
+        try {
+            // 定义资源名称,通常与接口请求地址一致
+            entry = SphU.entry(RESOURCE_NAME);
+            String str = "hello world";
+            log.info("============" + str + "===========");
+            return str;
+        } catch (BlockException e) {
+            log.info("block");
+            return "被流控了!";
+        } catch (Exception exception) {
+            // 若需要配置降级规则,需要使用这种方式记录业务异常
+            Tracer.traceEntry(exception, entry);
+        } finally {
+            if (entry != null) {
+                entry.exit();
+            }
+        }
+
+        return null;
+    }
+
+    /*
+    // 初始化方法
+    @PostConstruct
+    private static void initFlowRules() {
+        // 流控规则集合
+        List<FlowRule> rules = new ArrayList<>();
+
+        // 一个FlowRule就是一个流控规则
+        FlowRule rule = new FlowRule();
+        为哪个资源进行流控的规则限制
+        这里就和上面controller中的方法对应起来了
+        表明当前rule是针对上述RESOURCE_NAME的规则进行限制的,谁用了这个资源就会被该规则流控
+        rule.setRefResource(RESOURCE_NAME);
+        // 设置流控规则为QPS(实际上还有很多规则可以参考官方文档)
+        rule.setGrade(RuleConstant.FLOW_GRADE_THREAD);
+        // 设置受保护的阈值,每秒只有一次
+        rule.setCount(0);
+        rules.add(rule);
+        // 加载配置好的规则
+        FlowRuleManager.loadRules(rules);
+    }
+    */
+
+    @RequestMapping("user")
+    @SentinelResource(value = USER_RESOURCE_NAME, blockHandler = "blockHandlerForGetUser")
+    public User getUser(String id) {
+        return new User("蔡徐坤");
+    }
+
+    /**
+     * 流控方法必须为public
+     * 方法返回值必须与被流控方法(原方法)保持一致
+     * 参数必须与原方法保持一致(并且顺序也一直)
+     * 可以在流控方法最后添加一个BlockException(可以通过该异常获取当前是类似类型的流控)
+     * @param id 拿到被流控方法的入参
+     * @param e  拿到异常
+     */
+    public User blockHandlerForGetUser(String id, BlockException e) {
+        e.printStackTrace();
+        return new User("流控");
+    }
+}
+```
+
+`@SentinelResource`  
+* value:设置资源
+* blockHandler:流控降级后的处理方法(不需要在耦合在接口中);默认该方法必须与被流控方法声明在一个类中
+* blockHandlerClass:默认流控方式是和被流控方法在一个类中,如果想流控方法单独在一个类中,通过设置改属性提供流控方法所在的类;并且<font color="#00FF00">如果声明在别的类中则流控方法必须为静态方法</font>
+* fallback:当接口中出现了异常就可以交给fallback指定的方法进行处理;注意和blockHandler区分,blockHandler是接口被流控后指定的处理方法;fallback的方法约定与blockHandler一致
+  如果同时指定了fallback和blockHandler,<font color="#00FF00">则blockHandler方法的优先级是要高于fallback方法的</font>
+* fallbackClass:同blockHandlerClass
+* exceptionsToIgnore:排除哪些异常不使用fallback处理
+
+*个人感觉异常处理的方法没必要,这可能会扰乱事务的处理*
+
+#### 5.2.3 代码设置熔断规则
+1.controller  
+```java
+@RestController
+@RequestMapping("/sentinel")
+@Slf4j
+public class HelloController {
+    public static final String DEGRADE_RESOURCE_NAME = "degrade";
+    
+    @RequestMapping("degrade")
+    @SentinelResource(value = DEGRADE_RESOURCE_NAME, entryType = EntryType.IN, blockHandler = "blockHandlerForFb")
+    public User degrade(String id) {
+        throw new RuntimeException("异常");
+    }
+
+    public User blockHandlerForFb(String id, BlockException e) {
+        return new User("熔断");
+    }
+
+    @PostConstruct
+    public void initDegradeRule() {
+        List<DegradeRule> degradeRules = new ArrayList<>();
+        DegradeRule degradeRule = new DegradeRule();
+        degradeRule.setResource(DEGRADE_RESOURCE_NAME);
+        // 设置规则策略:异常数
+        degradeRule.setGrade(RuleConstant.DEGRADE_GRADE_EXCEPTION_COUNT);
+        // 阈值
+        degradeRule.setCount(2);
+        // 触发熔断最小请求数
+        degradeRule.setMinRequestAmount(2);
+        // 统计时长,一分钟执行了两次出现了两次异常则触发熔断
+        degradeRule.setStatIntervalMs(60 * 1000);
+
+        /*
+        熔断降级独有的,设置熔断持续时长,一旦熔断之后在这个时间窗口内的所有请求都熔断
+        时间窗口结束之后会恢复方法的请求,但如果在恢复之后第一次调用方法就出现异常则会直接熔断
+         */
+        degradeRule.setTimeWindow(10);
+
+
+        degradeRules.add(degradeRule);
+        DegradeRuleManager.loadRules(degradeRules);
+    }
+}
+```
+
+2.启动测试  
+演示效果是,第一次请求异常、第二次请求异常;第三次请求返回Json熔断  
+
+**<font color="#FF00FF">流控设置在服务提供者,降级设置在服务消费者</font>**
+
+### 5.3 Sentinel控制台
+**目录:**  
+5.3.1 Sentinel基本环境搭建  
+5.3.2 SpringCloudAlibaba整合Sentinel  
+5.3.3 流控规则  
+5.3.4 流控模式  
+
+#### 5.3.1 Sentinel基本环境搭建
+1.选择版本  
+按照alibaba提供的版本说明进行下载[https://github.com/alibaba/spring-cloud-alibaba/wiki/%E7%89%88%E6%9C%AC%E8%AF%B4%E6%98%8E](https://github.com/alibaba/spring-cloud-alibaba/wiki/%E7%89%88%E6%9C%AC%E8%AF%B4%E6%98%8E)  
+
+2.下载sentinel  
+SentinelDocker地址:[https://hub.docker.com/r/bladex/sentinel-dashboard/tags?page=1&ordering=last_updated](https://hub.docker.com/r/bladex/sentinel-dashboard/tags?page=1&ordering=last_updated)  
+
+拉取镜像:
+```shell
+docker pull bladex/sentinel-dashboard:1.8.0
+```
+
+运行容器:  
+```shell
+docker run -p 8858:8858 --name sentinelDashboard \
+-d bladex/sentinel-dashboard:1.8.0
+```
+
+3.访问sentinelDashBoard  
+![sentinel](resources/springcloud/41.png)  
+账号密码都输入sentinel即可登陆  
+
+4.详情配置  
+sentinel的详情配置见:[https://github.com/alibaba/Sentinel/wiki/%E6%8E%A7%E5%88%B6%E5%8F%B0](https://github.com/alibaba/Sentinel/wiki/%E6%8E%A7%E5%88%B6%E5%8F%B0)  
+docker的配置方式暂时还没有找到  
+
+5.修改pom文件  
+还是在sentinel-demo模块下,修改pom文件引入sentinelDashBoard依赖  
+```xml
+<!-- 整合控制台 -->
+<dependency>
+    <groupId>com.alibaba.csp</groupId>
+    <artifactId>sentinel-transport-simple-http</artifactId>
+    <version>1.8.0</version>
+</dependency>
+```
+
+*注意:现在这个模块还没有整合SpringCloudAlibaba,后续整合Alibaba的时候这些pom都不需要这么麻烦*  
+
+6.配置启动参数  
+现在还需要配置服务启动时连接sentinel的地址,配置方式是使用Java运行时参数  
+![启动](resources/springcloud/42.png)  
+`-Dcsp.sentinel.dashboard.server=192.168.149.130:8858`  
+修改为对应的IP+端口即可  
+
+7.启动测试  
+启动微服务并且随便访问一个接口,一段时间之后刷新sentinel就可以看到相关服务了  
+![启动测试](resources/springcloud/43.png)  
+
+#### 5.3.2 SpringCloudAlibaba整合Sentinel
+1.创建sentinel-alibaba模块  
+
+2.修改pom文件  
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.github.cnsukidayo</groupId>
+        <artifactId>springcloud</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <groupId>com.github.cnsukidayo</groupId>
+    <artifactId>sentinel-alibaba</artifactId>
+
+    <properties>
+        <maven.compiler.source>9</maven.compiler.source>
+        <maven.compiler.target>9</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <!--sentinel启动器-->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>
+```
+
+3.修改yml配置文件  
+```yml
+server:
+  port: 8060
+spring:
+  application:
+    name: sentinel-alibaba
+  cloud:
+    sentinel:
+      transport:
+        # 配置dashboard地址
+        dashboard: 192.168.149.130:8858
+```
+
+4.启动测试  
+*同理还是需要先访问一下服务的接口,否则不会在sentinel中进行显示*  
+![启动测试](resources/springcloud/44.png)  
+
+#### 5.3.3 流控规则
+提示:所有的规则都是服务于降级的,不能本末倒置  
+
+1.实时监控  
+![实时监控](resources/springcloud/45.png)  
+<font color="#00FF00">用于实时监控所有服务调用情况的</font>  
+
+2.簇点链路  
+![簇点链路](resources/springcloud/46.png)  
+<font color="#00FF00">用于显示所有可以进行流控、降级规则设置的资源</font>  
+
+3.流控规则使用场景  
+* 应多洪峰流量:秒杀、大促、下单、订单回流
+* 消息型场景:削峰填谷、冷热启动
+* 付费系统:根据流量付费
+
+4.流控规则  
+4.1 <font color="#00FF00">QPS</font>:设置QPS限制  
+![QPS](resources/springcloud/47.png)  
+这里新增了一个规则限制每秒的请求数量为2,当超过阈值后sentinel会返回默认的降级内容`Blocked by Sentinel (flow limiting)`  
+如果需要自定义返回降级内容,可以通过之前的5.2.2 @SentinelResource注解节的内容来自定义  
+
+4.2 <font color="#00FF00">线程数</font>:设置服务提供者线程数,也就是服务端当前创建了多少个线程来处理请求,一旦线程数量超过阈值则会降级  
+这种流控方式用于保护业务线程池不被<font color="#00FF00">慢调用</font>耗尽,慢调用就是调用目标服务时间太长,从而导致大量的请求积压在服务调用方,<font color="#00FF00">导致服务调用方线程数飙升</font>,设置线程数流控规则可以避免  
+这里直接测试不好显示效果,改造一下controller;并且把流控规则设置为线程数2  
+然后用两个浏览器进行测试即可  
+```java
+@GetMapping("hello")
+public String hello() {
+    try {
+        TimeUnit.MILLISECONDS.sleep(500);
+    } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+    }
+    return "Hello";
+}
+```
+
+5.统一降级信息返回结果  
+*提示:之前如果想自定义降级的返回信息可以使用@SentinelResource注解,但是每一个controller都需要写一个对应的降级方法显得麻烦,实际上可以用一个统一的降级处理;<font color="#00FF00">两种方式实现降级处理的区别就是粒度</font>*  
+
+5.1 创建BlockExceptionHandler实现类  
+*统一异常处理(降级处理)是通过实现BlockExceptionHandler接口来完成的*  
+在exception包下创建MyBlockExceptionHandler类  
+```java
+@Component
+public class MyBlockExceptionHandler implements BlockExceptionHandler {
+    private final Logger logger = LoggerFactory.getLogger(MyBlockExceptionHandler.class);
+
+    @Override
+    public void handle(HttpServletRequest request, HttpServletResponse response, BlockException e) throws Exception {
+        // getRule() 获取规则的详情信息
+        logger.info("BlockException ===============>" + e.getRule());
+        Result r = null;
+        if (e instanceof FlowException) {
+            r = Result.error(101, "接口限流了");
+        } else if (e instanceof DegradeException) {
+            r = Result.error(102, "服务降级了");
+        } else if (e instanceof ParamFlowException) {
+            r = Result.error(103, "热点参数限流了");
+        } else if (e instanceof SystemBlockException) {
+            r = Result.error(104, "触发系统保护规则了");
+        } else if (e instanceof AuthorityException) {
+            r = Result.error(105, "授权规则不通过");
+        }
+        // 返回json数据
+        response.setStatus(500);
+        response.setCharacterEncoding("utf-8");
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        new ObjectMapper().writeValue(response.getWriter(),r);
+    }
+}
+```
+
+5.2 在domian包下创建Result类  
+```java
+public class Result<T> {
+
+    private Integer code;
+    private String message;
+    private T data;
+
+    public Result(Integer code, String message) {
+        this.code = code;
+        this.message = message;
+    }
+
+    public Result(Integer code, String message, T data) {
+        this.code = code;
+        this.message = message;
+        this.data = data;
+    }
+
+    public static Result error(Integer code, String message) {
+        return new Result(code, message);
+    }
+    // 提供getter/setter方法
+}
+```
+
+5.3 启动测试  
+配置接口限流规则为QPS=1;快速刷新浏览器收到返回信息如下  
+```json
+{   
+    "code":101,
+    "message":"接口限流了",
+    "data":null
+}
+```
+
+#### 5.3.4 流控模式
+**流控模式是流控规则的高级用法,点击流控规则的高级选项展开流控模式选项**  
+![流控模式](resources/springcloud/48.png)  
+
+1.直接  
+默认选项,当资源名(资源名就是接口访问路径)超过阈值之后该接口就降级  
+
+2.关联  
+在关联界面中会让你输入<font color="#00FF00">关联资源</font>选项,关联资源也是一个**接口的路径**(当然可以直接从簇点链路里面查到所有的资源),它的意思是一旦关联资源的流量超过了限流规则的阈值之后,则会将当前资源降级(而不是关联资源)  
+
+**使用场景:**  
+假设现在有两个接口,一个是查询订单接口一个是下单接口;当下单接口流量较大时希望限制查询订单接口就可以使用关联  
+注意在配置的时候,因为要对查询订单接口限流所以就在查询订单上配置限流规则,然后关联下单接口  
+*提示:这里测试的话可以使用jmeter进行测试,持续请求下单接口然后访问查询接口看效果*  
+
+3.链路  
+在链路界面中需要设置<font color="#00FF00">入口资源</font>,它的意思是对当前资源进行流控判断,但受到影响的是入口资源  
+假设现在有两个接口test1和test2接口它们都调用了getUser这个接口  
+```mermaid
+flowchart TB
+   test1 --> getUser
+   test2 --> getUser
+```
+<font color="#00FF00">sentinel不仅可以对接口进行流控还可以对业务方法进行流控</font>  
+此时如果对getUser接口进行流控则最终test1和test2都会受到影响,如果只希望test2受到影响而test1不受影响就可以使用链路  
+同理在配置的时候,因为对getUser进行限流,所以就在getUser资源上配置限流规则;一旦getUser到达阈值后<font color="#00FF00">对链路test2进行限流</font>  
+![链路](resources/springcloud/49.png)  
+
 
 
 
