@@ -2,6 +2,7 @@
 1.服务注册中心  
 2.负载均衡器  
 3.远程调用  
+4.服务配置中心  
 
 
 **附录:**  
@@ -555,6 +556,7 @@ spring:
 ## 3.远程调用
 **目录:**  
 3.1 Feign基本环境搭建  
+3.2 OpenFeign自定义配置  
 
 
 ### 3.1 Feign基本环境搭建
@@ -635,6 +637,7 @@ public interface StockFeignService {
 `@FeignClient`  
 * name:目标服务的名称(服务提供者的名称)
 * path:远程调用的前缀(这里正好和StockController接口对应上)
+* configuration:设置配置类(可以设置当前远程调用接口的日志级别)
 
 <font color="#FF00FF">所以这里的实现和JPA很类似,都是使用动态代理完成的;</font>
 
@@ -662,6 +665,196 @@ public class OrderController {
 2.8 测试运行  
 访问地址[http://localhost:8081/api/order/add](http://localhost:8081/api/order/add)成功显示扣减库存8082  
 并且OpenFeign也是默认支持负载均衡的  
+
+### 3.2 OpenFeign自定义配置
+1.OpenFeign日志级别  
+OpenFeign有四种级别的日志  
+* NONE:不记录任何日志
+* BASIC:仅记录请求方法、URL、响应状态码以及执行时间
+* HEADERS:在BASIC的基础上记录请求和响应的header
+* FULL:记录请求和响应的header、body和元数据
+
+使用示例-<font color="#00FF00">全局配置</font>(所有远程调用都使用该日志配置):
+```java
+@Configuration
+public class FeignConfig {
+
+    @Bean
+    public Logger.Level feignLoggerLevel() {
+        return Logger.Level.FULL;
+    }
+
+}
+```
+由于Feign的日志受到SpringBoot的管理,并且Feign默认的输出级别是debug;所以仅仅这样还不够,这里还需要把Feign接口所在的包的日志级别设置为至少debug  
+在order-openfeign模块的yml添加如下配置
+```yml
+logging:
+  level:
+    io.github.cnsukidayo.cloud.order.feign: debug
+```
+测试运行,成功打印日志  
+
+使用示例-<font color="#00FF00">局部配置</font>(针对不同的OpenFeign接口使用不同的日志级别)  
+其实这里的配置类似3.1 通过配置类修改负载均衡策略=>@RibbonClients注解哪边的效果  
+提供一个配置类然后不把该配置类添加到容器中
+```java
+public class FeignConfig {
+
+    @Bean
+    public Logger.Level feignLoggerLevel() {
+        return Logger.Level.FULL;
+    }
+}
+```
+
+在远程调用接口StockFeignService的@FeignClient注解设置configuration为刚才的注解类  
+```java
+@FeignClient(name = "service-stock", path = "/api/stock/inner", configuration = FeignConfig.class)
+public interface StockFeignService {
+
+    @GetMapping("reduce")
+    String reduce();
+}
+```
+
+通过<font color="#00FF00">配置文件</font>完成Feign的日志配置  
+```yml
+feign:
+  client:
+    config:
+      service-stock: #对应的服务名,这里不是设置接口;是整个系统中只要调用的目标服务是该服务就使用如下配置
+        logger-level: full #设置日志等级为full
+```
+
+2.~~契约配置~~  
+*提示:后续的配置将只记录yml的局部配置方式,暂时略过全局的配置方式;如果有需要后续额可以加上.全局配置指的是通过Config类进行配置的方式*  
+
+*提示:之前说过OpenFeign是基于Feign的,使其支持SpringMVC注解*  
+原生Feign的注解中,使用@RequestLine来替代@RequestMapping,使用@Param来替代@PathVariable注解,如果需要兼容老版本的Feign不使用现在SpringMVC的注解,则可以使用契约配置,切换为原来的Feign注解  
+当然我们这里没这个需要,<font color="#00FF00">这节完全可以跳过</font>  
+
+配置类的配置方式:
+```java
+@Bean
+public Contract feignContract(){
+  return new Contract.Default();
+}
+```
+
+配置文件的配置方式:  
+```yml
+feign:
+  client:
+    config:
+      service-stock:
+      contract: feign.Contract.Default
+```
+
+3.超时时间配置  
+配置类方式  
+```java
+@Configuration
+public class FeignConfig {
+
+    @Bean
+    public Request.Options options() {
+      /*
+      args0:连接的超时时间(默认为2s)
+      args1:请求处理的超时时间(默认为5s)
+      */
+      return new Request.Options(5000,10000);
+    }
+}
+```
+
+配置文件:  
+```yml
+feign:
+  client:
+    config:
+      service-stock:
+        # 连接超时时间
+        connect-timeout: 5000
+        # 处理超时时间
+        read-timeout: 3000
+```
+
+4.配置请求拦截器  
+*解释:这里的拦截器意思是,在OpenFeign请求前做一些前置处理*  
+*提示:貌似没有响应拦截器*  
+实现`RequestInterceptor`接口并添加到容器中即可  
+
+配置类:
+```java
+@Component
+public class FeignAuthRequestInterceptor implements RequestInterceptor {
+    @Override
+    public void apply(RequestTemplate template) {
+        System.out.println("==============请求");
+        // 业务逻辑
+        String access_token = UUID.randomUUID().toString();
+        template.header("Authorization", access_token);
+    }
+}
+```
+
+配置文件:  
+```yml
+feign:
+  client:
+    config:
+      service-stock:
+        # 指定拦截器数组
+        request-interceptors:
+          # 配置拦截器的类全限定名
+          - io.github.cnsukidayo.cloud.order.config.FeignAuthRequestInterceptor
+```
+
+## 4.服务配置中心
+**目录:**  
+4.1 服务配置中心概念介绍  
+4.2 nacos配置管理界面  
+
+### 4.1 服务配置中心概念介绍
+1.服务注册中心特征  
+* 维护性:方便管理和维护,不需要记住每一个节点上有哪些配置信息;采用集中式管理
+* 时效性:配置更改完成立马生效,不需要重启
+* 安全性:不把配置文件信息放在应用本体中,保障了安全性;程序员只有开发环境的配置,没有生产环境的配置
+
+2.配置中心组件对比  
+目前配置中心的组件有:nacos、config、apollo
+* Spring Cloud Config 大部分场景需要结合git使用,动态变更还需要依赖Spring Cloud Bus消息总线来通知所有客户端信息变化
+* Spring Cloud Config不提供可视化界面
+* <font color="#00FF00">nacos config 使用长轮询更新配置,一旦配置有变动后通知服务的速度非常快</font>
+* apollo在功能上几乎和nacos差不多,<font color="#00FF00">但nacos的性能比apollo优秀很多</font>
+
+### 4.2 nacos配置管理界面
+1.命名空间  
+之前在1.3节已经讲过命名空间
+<font color="#FF00FF">命名空间的约定:产品线+环境</font> 例如这里有两个命名空间,淘宝-dev、天猫-test  
+![界面说明](resources/springcloud/8.png)
+
+2.配置组  
+*提示:配置组是基于命名空间的,即<font color="#00FF00">一个服务只能读取到它所在的命名空间下的配置</font>;远程调用的时候也只能调用该命名空间下面的服务列表*  
+
+![配置组](resources/springcloud/20.png)  
+* Data ID:可以按照项目来进行分组
+  例如当前在淘宝-dev这个命名空间下,有一个配置分组是live-common,代表这是直播项目的配置,其中Group指定为gift(表示这是礼物微服务的配置)
+  但实际上一般不会这么细致,一般Group都是使用默认
+  可以通过live-common、live-database的这种方式来区分配置;前者是直播项目的通用配置,后者是直播项目数据库的配置
+* Group:可以按照项目的服务来进行分组
+
+3.历史版本  
+![历史版本](resources/springcloud/21.png)  
+发布成功之后就可以看到配置信息了,接着点击历史版本可以看到所有的历史修改记录  
+![历史版本](resources/springcloud/22.png)  
+<font color="#00FF00">另外这里的监听查询可以监听当前配置文件有没有正确的推送到服务上</font>  
+
+4.克隆  
+还可以针对配置文件进行克隆
+![克隆](resources/springcloud/23.png)  
+
 
 
 
