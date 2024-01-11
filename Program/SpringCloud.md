@@ -1019,6 +1019,7 @@ public class HelloController {
 5.3.1 Sentinel基本环境搭建  
 5.3.2 SpringCloudAlibaba整合Sentinel  
 5.3.3 流控规则  
+5.3.4 流控模式  
 
 #### 5.3.1 Sentinel基本环境搭建
 1.选择版本  
@@ -1144,12 +1145,129 @@ spring:
 * 付费系统:根据流量付费
 
 4.流控规则  
-<font color="#00FF00">QPS</font>:设置QPS限制  
+4.1 <font color="#00FF00">QPS</font>:设置QPS限制  
 ![QPS](resources/springcloud/47.png)  
 这里新增了一个规则限制每秒的请求数量为2,当超过阈值后sentinel会返回默认的降级内容`Blocked by Sentinel (flow limiting)`  
 如果需要自定义返回降级内容,可以通过之前的5.2.2 @SentinelResource注解节的内容来自定义  
 
-<font color="#00FF00">线程数</font>:设置服务提供者线程数,也就是服务端当前创建了多少个线程来处理请求,一旦线程数量超过阈值则会降级  
+4.2 <font color="#00FF00">线程数</font>:设置服务提供者线程数,也就是服务端当前创建了多少个线程来处理请求,一旦线程数量超过阈值则会降级  
+这种流控方式用于保护业务线程池不被<font color="#00FF00">慢调用</font>耗尽,慢调用就是调用目标服务时间太长,从而导致大量的请求积压在服务调用方,<font color="#00FF00">导致服务调用方线程数飙升</font>,设置线程数流控规则可以避免  
+这里直接测试不好显示效果,改造一下controller;并且把流控规则设置为线程数2  
+然后用两个浏览器进行测试即可  
+```java
+@GetMapping("hello")
+public String hello() {
+    try {
+        TimeUnit.MILLISECONDS.sleep(500);
+    } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+    }
+    return "Hello";
+}
+```
+
+5.统一降级信息返回结果  
+*提示:之前如果想自定义降级的返回信息可以使用@SentinelResource注解,但是每一个controller都需要写一个对应的降级方法显得麻烦,实际上可以用一个统一的降级处理;<font color="#00FF00">两种方式实现降级处理的区别就是粒度</font>*  
+
+5.1 创建BlockExceptionHandler实现类  
+*统一异常处理(降级处理)是通过实现BlockExceptionHandler接口来完成的*  
+在exception包下创建MyBlockExceptionHandler类  
+```java
+@Component
+public class MyBlockExceptionHandler implements BlockExceptionHandler {
+    private final Logger logger = LoggerFactory.getLogger(MyBlockExceptionHandler.class);
+
+    @Override
+    public void handle(HttpServletRequest request, HttpServletResponse response, BlockException e) throws Exception {
+        // getRule() 获取规则的详情信息
+        logger.info("BlockException ===============>" + e.getRule());
+        Result r = null;
+        if (e instanceof FlowException) {
+            r = Result.error(101, "接口限流了");
+        } else if (e instanceof DegradeException) {
+            r = Result.error(102, "服务降级了");
+        } else if (e instanceof ParamFlowException) {
+            r = Result.error(103, "热点参数限流了");
+        } else if (e instanceof SystemBlockException) {
+            r = Result.error(104, "触发系统保护规则了");
+        } else if (e instanceof AuthorityException) {
+            r = Result.error(105, "授权规则不通过");
+        }
+        // 返回json数据
+        response.setStatus(500);
+        response.setCharacterEncoding("utf-8");
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        new ObjectMapper().writeValue(response.getWriter(),r);
+    }
+}
+```
+
+5.2 在domian包下创建Result类  
+```java
+public class Result<T> {
+
+    private Integer code;
+    private String message;
+    private T data;
+
+    public Result(Integer code, String message) {
+        this.code = code;
+        this.message = message;
+    }
+
+    public Result(Integer code, String message, T data) {
+        this.code = code;
+        this.message = message;
+        this.data = data;
+    }
+
+    public static Result error(Integer code, String message) {
+        return new Result(code, message);
+    }
+    // 提供getter/setter方法
+}
+```
+
+5.3 启动测试  
+配置接口限流规则为QPS=1;快速刷新浏览器收到返回信息如下  
+```json
+{   
+    "code":101,
+    "message":"接口限流了",
+    "data":null
+}
+```
+
+#### 5.3.4 流控模式
+**流控模式是流控规则的高级用法,点击流控规则的高级选项展开流控模式选项**  
+![流控模式](resources/springcloud/48.png)  
+
+1.直接  
+默认选项,当资源名(资源名就是接口访问路径)超过阈值之后该接口就降级  
+
+2.关联  
+在关联界面中会让你输入<font color="#00FF00">关联资源</font>选项,关联资源也是一个**接口的路径**(当然可以直接从簇点链路里面查到所有的资源),它的意思是一旦关联资源的流量超过了限流规则的阈值之后,则会将当前资源降级(而不是关联资源)  
+
+**使用场景:**  
+假设现在有两个接口,一个是查询订单接口一个是下单接口;当下单接口流量较大时希望限制查询订单接口就可以使用关联  
+注意在配置的时候,因为要对查询订单接口限流所以就在查询订单上配置限流规则,然后关联下单接口  
+*提示:这里测试的话可以使用jmeter进行测试,持续请求下单接口然后访问查询接口看效果*  
+
+3.链路  
+在链路界面中需要设置<font color="#00FF00">入口资源</font>,它的意思是对当前资源进行流控判断,但受到影响的是入口资源  
+假设现在有两个接口test1和test2接口它们都调用了getUser这个接口  
+```mermaid
+flowchart TB
+   test1 --> getUser
+   test2 --> getUser
+```
+<font color="#00FF00">sentinel不仅可以对接口进行流控还可以对业务方法进行流控</font>  
+此时如果对getUser接口进行流控则最终test1和test2都会受到影响,如果只希望test2受到影响而test1不受影响就可以使用链路  
+同理在配置的时候,因为对getUser进行限流,所以就在getUser资源上配置限流规则;一旦getUser到达阈值后<font color="#00FF00">对链路test2进行限流</font>  
+![链路](resources/springcloud/49.png)  
+
+
+
 
 
 
