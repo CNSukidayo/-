@@ -879,7 +879,7 @@ feign:
 * 业务调用持续出现异常
 
 3.服务雪崩样例图  
-![服务雪崩](resources/springcloud/40.png)  
+![服务雪崩](resources/springcloud/24.png)  
 假设图中积分服务能承受的压力较小,当大量请求来到秒杀商品这条调用链时,最终会将积分服务打垮,从而导致大量的请求积压在商品服务;最终导致整个秒杀商品不可用  
 然而由于<font color="#00FF00">商品服务是别的服务的共享服务</font>最终会导致服务雪崩  
 <font color="#FF00FF">服务雪崩:因服务提供者不可用导致服务调用者的不可用,并将不可用逐渐放大的过程就叫服务雪崩效应</font>  
@@ -1233,7 +1233,7 @@ docker run -p 8858:8858 --name sentinelDashboard \
 ```
 
 3.访问sentinelDashBoard  
-![sentinel](resources/springcloud/41.png)  
+![sentinel](resources/springcloud/25.png)  
 账号密码都输入sentinel即可登陆  
 
 4.详情配置  
@@ -1255,13 +1255,13 @@ docker的配置方式暂时还没有找到
 
 6.配置启动参数  
 现在还需要配置服务启动时连接sentinel的地址,配置方式是使用Java运行时参数  
-![启动](resources/springcloud/42.png)  
+![启动](resources/springcloud/26.png)  
 `-Dcsp.sentinel.dashboard.server=192.168.149.130:8858`  
 修改为对应的IP+端口即可  
 
 7.启动测试  
 启动微服务并且随便访问一个接口,一段时间之后刷新sentinel就可以看到相关服务了  
-![启动测试](resources/springcloud/43.png)  
+![启动测试](resources/springcloud/27.png)  
 
 #### 5.3.2 SpringCloudAlibaba整合Sentinel
 1.创建sentinel-alibaba模块  
@@ -1319,17 +1319,17 @@ spring:
 
 4.启动测试  
 *同理还是需要先访问一下服务的接口,否则不会在sentinel中进行显示*  
-![启动测试](resources/springcloud/44.png)  
+![启动测试](resources/springcloud/28.png)  
 
 #### 5.3.3 流控规则
 提示:所有的规则都是服务于降级的,不能本末倒置  
 
 1.实时监控  
-![实时监控](resources/springcloud/45.png)  
+![实时监控](resources/springcloud/29.png)  
 <font color="#00FF00">用于实时监控所有服务调用情况的</font>  
 
 2.簇点链路  
-![簇点链路](resources/springcloud/46.png)  
+![簇点链路](resources/springcloud/30.png)  
 <font color="#00FF00">用于显示所有可以进行流控、降级规则设置的资源</font>  
 
 3.流控规则使用场景  
@@ -1339,7 +1339,7 @@ spring:
 
 4.流控规则  
 4.1 <font color="#00FF00">QPS</font>:设置QPS限制  
-![QPS](resources/springcloud/47.png)  
+![QPS](resources/springcloud/31.png)  
 这里新增了一个规则限制每秒的请求数量为2,当超过阈值后sentinel会返回默认的降级内容`Blocked by Sentinel (flow limiting)`  
 如果需要自定义返回降级内容,可以通过之前的5.2.2 @SentinelResource注解节的内容来自定义  
 
@@ -1433,7 +1433,7 @@ public class Result<T> {
 
 #### 5.3.4 流控模式
 **流控模式是流控规则的高级用法,点击流控规则的高级选项展开流控模式选项**  
-![流控模式](resources/springcloud/48.png)  
+![流控模式](resources/springcloud/32.png)  
 
 1.直接  
 默认选项,当资源名(资源名就是接口访问路径)超过阈值之后该接口就降级  
@@ -1457,12 +1457,7 @@ flowchart TB
 <font color="#00FF00">sentinel不仅可以对接口进行流控还可以对业务方法进行流控</font>  
 此时如果对getUser接口进行流控则最终test1和test2都会受到影响,如果只希望test2受到影响而test1不受影响就可以使用链路  
 同理在配置的时候,因为对getUser进行限流,所以就在getUser资源上配置限流规则;一旦getUser到达阈值后<font color="#00FF00">对链路test2进行限流</font>  
-![链路](resources/springcloud/49.png)  
-
-
-
-
-
+![链路](resources/springcloud/33.png)  
 
 
 
