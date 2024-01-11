@@ -816,6 +816,8 @@ feign:
 **目录:**  
 4.1 服务配置中心概念介绍  
 4.2 nacos配置管理界面  
+4.3 权限管理  
+4.4 读取配置中心文件  
 
 ### 4.1 服务配置中心概念介绍
 1.服务注册中心特征  
@@ -855,6 +857,75 @@ feign:
 4.克隆  
 还可以针对配置文件进行克隆
 ![克隆](resources/springcloud/23.png)  
+
+### 4.3 权限管理
+1.用户列表  
+![用户列表](resources/springcloud/34.png)  
+可以点击左侧的用户列表->创建用户来新增用户  
+
+2.角色管理  
+![角色管理](resources/springcloud/35.png)  
+可以针对用户添加角色,例如这里为dev用户分配了dev_role角色  
+
+3.权限管理  
+![权限管理](resources/springcloud/36.png)  
+<font color="#00FF00">权限管理可以针对角色分配该角色在不同命名空间下的权限(分为只读、只写、读写权限)</font>  
+
+### 4.4 读取配置中心文件
+1.创建配置文件  
+这里还是使用4.2 nacos配置管理界面=>2.配置组=>live-common中的配置文件  
+
+2.修改pom文件  
+*提示:这里在service-stock模块中进行演示*  
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!--服务注册发现-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+    </dependency>
+
+</dependencies>
+```
+
+~~3.编写bootstrap.yml配置文件~~
+<font color="#FF00FF">使用配置中心必须使用bootstrap.yml/properties配置文件来配置nacos远程配置中心的地址</font>  
+```yml
+spring:
+  application:
+    # name必须设置为配置中心对应的Data Id的值
+    name: live-common
+  cloud:
+    nacos:
+      # 配置nacos服务器地址
+      server-addr: 192.168.230.225:8848
+      # 必须配置账户和密码
+      username: nacos
+      password: nacos
+      config:
+        # 设置命名空间
+        namespace: public
+        # 设置分组
+        group: DEFAULT_GROUP
+```
+
+*提示:新版已经不需要使用bootstrap.yml配置文件了,而且2.0的版本和1.0又对应不上,所以暂且跳过*  
+详情可以参考:[https://github.com/alibaba/spring-cloud-alibaba/blob/2.2.x/spring-cloud-alibaba-examples/nacos-example/readme-zh.md]([https://](https://github.com/alibaba/spring-cloud-alibaba/blob/2.2.x/spring-cloud-alibaba-examples/nacos-example/readme-zh.md))
+
+4.获取变量  
+实际上通过`application.getEnvironment().getProperty("key")`方法就可以获取到配置信息了;是不是TM的似曾相识?  
+
+
 
 
 
