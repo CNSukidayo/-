@@ -4,6 +4,8 @@
 3.远程调用  
 4.服务配置中心  
 5.服务降级  
+6.分布式事务  
+7.网关  
 
 
 **附录:**  
@@ -578,6 +580,7 @@ OpenFeign对Feign做了增强,使其支持SpringMVC注解,并且OpenFeign还整�
 
 2.3 添加主启动类  
 在项目下创建io.github.cnsukidayo.cloud.order包,在该包下创建OrderApplication主启动类  
+为主启动类上添加`@EnableFeignClients`注解来启用OpenFeign  
 ```java
 @SpringBootApplication
 @EnableFeignClients
@@ -639,6 +642,7 @@ public interface StockFeignService {
 * name:目标服务的名称(服务提供者的名称)
 * path:远程调用的前缀(这里正好和StockController接口对应上)
 * configuration:设置配置类(可以设置当前远程调用接口的日志级别)
+* fallback:指定远程调用熔断降级时执行的类,该类需要实现当前接口,并且保持参数一致(详情见5.6 OpenFeign整合降级)
 
 <font color="#FF00FF">所以这里的实现和JPA很类似,都是使用动态代理完成的;</font>
 
@@ -1050,6 +1054,10 @@ todo
 5.3 Sentinel控制台  
 5.4 流控规则  
 5.5 熔断规则  
+5.6 OpenFeign整合降级  
+5.7 热点参数流控  
+5.8 系统保护规则  
+5.9 sentinel持久化模式  
 
 
 ### 5.1 服务降级基本环境搭建
@@ -1737,6 +1745,307 @@ Wram Up用于处理激增流量,而排队等待用于处理脉冲流量
 1.进入熔断设置页面  
 ![熔断页面](resources/springcloud/38.png)  
 点击簇点链路=>选择资源=>降级  
+
+2.慢调用比例  
+![慢调用比例](resources/springcloud/39.png)  
+
+* 最大RT:当前允许的最大响应时间,大于该值就是慢调用
+* 比例阈值:当单位时间内慢调用的比例大于该阈值时就会对服务进行熔断
+* 熔断时长:熔断多长时间
+* 最小请求数:单位时间内请求数量大于该值时才会触发熔断
+
+图中配置代表,单位时间内调用时长大于101ms的慢调用数量超过5次并且比例达到0.2时会熔断3s  
+注意这里配置在sentinel_default_context这个资源上,如果是在远程调用中发现该接口的执行时间过长(说明该服务调用的服务故障了),那么该接口就会理解返回错误信息,不会再去调用目标服务了;<font color="#FF00FF">表明目标服务被熔断了</font>(而不是sentinel_default_context这个服务被熔断了)<font color="#00FF00">即熔断规则配置在服务调用方</font>;
+
+3.异常比例  
+![异常比例](resources/springcloud/40.png)  
+同理,是对服务产生异常的比例进行判断的  
+使用jmeter进行测试运行1s内发送10个请求,发现前5次都是异常,第6次开始就是熔断  
+
+4.异常数  
+![异常数](resources/springcloud/41.png)  
+根据异常数进行熔断  
+
+### 5.6 OpenFeign整合降级
+1.创建openfeign-sentinel模块  
+
+2.编写pom文件  
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!--服务注册发现-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-openfeign</artifactId>
+    </dependency>
+
+    <!--添加sentinel依赖-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+    </dependency>
+</dependencies>
+```
+3.编写主启动类  
+```java
+@SpringBootApplication
+@EnableFeignClients
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+```
+
+
+4.编写yml配置文件  
+<font color="#FF00FF">这里不需要关联sentinel的DashBoard,因为熔断是sentinel自带的功能</font>(sentinel有核心库和DashBoard两个组件,这两个组件是独立运行的,之前5.2 Sentinel上手体验节讲的就是sentinel的核心库)  
+
+```yml
+server:
+  port: 8089
+spring:
+  application:
+    name: service-order
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.230.225:8848
+        username: nacos
+        password: nacos
+        namespace: public
+
+feign:
+  sentinel:
+    # 开启feign整合sentinel
+    enabled: true
+```
+
+5.编写controller  
+在当前模块的controller包下创建OrderController  
+```java
+@RestController
+@RequestMapping("/api/order")
+public class OrderController {
+
+    private final StockFeignService stockFeignService;
+
+    public OrderController(StockFeignService stockFeignService) {
+        this.stockFeignService = stockFeignService;
+    }
+
+    @GetMapping("add")
+    public String add() {
+        return stockFeignService.reduceE();
+    }
+}
+```
+
+6.编写远程调用接口  
+*提示:这里还是远程调用之前的service-stock模块中的StockController接口;先把该模块中bootstrap.yml配置文件中的内容注释掉*  
+在当前模块下创建feign文件夹,再在该文件夹下创建StockFeignService接口  
+```java
+@FeignClient(value = "service-stock", path = "/api/stock/inner")
+public interface StockFeignService {
+    @GetMapping("reduceE")
+    String reduceE();
+}
+```
+
+
+7.StockController  
+还是决定把服务提供者的接口代码粘贴一下,这里重点测试reduceE方法,该方法会抛出异常,并且该异常将传播到openfeign-sentinel模块  
+```java
+@RestController()
+@RequestMapping("/api/stock/inner")
+public class StockController {
+
+    @Value("${server.port}")
+    private String port;
+
+    @GetMapping("reduce")
+    public String reduce() {
+        return "扣减库存" + port;
+    }
+
+    @GetMapping("reduceE")
+    public String reduceE() {
+        int a = 1 / 0;
+        return "扣减库存" + port;
+    }
+}
+```
+
+8.编写降级类  
+还是在openfeign-sentinel的feign目录下编写降级类,意思就是指定服务调用者调用目标方法出现熔断时需要执行的降级方法  
+该类必须实现Feign接口  
+```java
+@Component
+public class StockFeignServiceFallback implements StockFeignService{
+    @Override
+    public String reduceE() {
+        return "降级啦!";
+    }
+}
+```
+
+### 5.7 热点参数流控
+1.什么是热点参数  
+* 假设有一个商品查询接口,该所有商品都调用该接口;如果根据商品ID进行查询,其中必然有些商品ID是热点参数,那么就可以针对这些热点商品进行防护  
+* 还有一类场景是针对某些接口进行<font color="#00FF00">防刷</font>,比如短信验证码验证接口(不是获取接口),有可能会暴力请求短信验证接口,那么<font color="#00FF00">为了保障其它的用户正常访问该接口就可以针对当前暴力破解的用户进行限制</font>  
+
+2.实现原理  
+热点淘汰策略LRU+Token Bucket流控  
+
+3.编写controller  
+来到sentinel-alibaba模块,在该模块下的controller包下创建HotController 
+```java
+@RestController
+@RequestMapping("/sentinel")
+public class HotController {
+
+    @RequestMapping("getById/{id}")
+    @SentinelResource(value = "getById", blockHandler = "hotBlockHandler")
+    public String getById(@PathVariable("id") Integer id) {
+        System.out.println("正常访问");
+        return "正常访问";
+    }
+
+    public String hotBlockHandler(@PathVariable("id") Integer id, BlockException e) {
+        return "热点异常处理";
+    }
+}
+```
+注意热点流控规则必须结合`@SentinelResource`注解进行使用,否则是不会生效的
+
+4.启动测试  
+
+5.来到sentinel控制面板  
+* 参数索引:指定要进行热点流控的参数在方法入参中的位置(索引)
+* 单机阈值:单机阈值在这里分为两种解释
+  * 当接口参数大部分都是热点参数时,单机阈值就是针对热点参数进行流控的;之后在高级界面配置的都是对普通值进行流控
+  * 当接口参数大部分都是普通参数时,单击阈值就是针对普通参数进行流控的;之后在高级界面配置的都是对热点值进行流控
+* 统计窗口时长:多次时间内请求(热点请求/普通请求)的QPS达到单击阈值触发流控
+
+*先假设我们上面接口的大部分参数都是普通参数,那么在热点规则面板中设置的阈值就是针对普通参数进行流控的*  
+![配置实例](resources/springcloud/42.png)  
+对于图中的配置,因为接口大部分都是普通参数,意思就是普通流量一秒钟可以访问10次接口(<font color="#00FF00">限流模式为QPS,单击阈值为10</font>)
+
+点击新增后对刚才的热点流控规则点击编辑=>高级选项,来到如下界面,在该界面可以对热点参数进行流控设置  
+![流控规则](resources/springcloud/43.png)  
+例如这里就对热点参数1限制它的访问频率为2,别的参数加起来限制在1s内10次即可  
+<font color="#00FF00">说白了该规则就是,有单独配置参数只规则的走单独配置的QPS规则,没有单独配置的走全局的QPS</font>
+
+6.运行测试访问  
+发现当参数为1并且访问频率大于1s两次时成功触发流控  
+
+### 5.8 系统保护规则
+1.使用场景  
+* 容量评估不到位,某个大流量接口限流配置不合理或没有配置,导致系统崩溃,来不及进行处理
+* 突然发现机器的Load和CPU usage等开始飚高,但却没有办法很快确认到底是什么原因造成的,也来不及处理
+* 当其中一台机器挂掉之后,本该由这台机器处理的流量被负载均衡到另外的机器上,另外的机器也被打挂了,引起系统雪崩
+* 希望有个全局的兜底保护,即使缺乏容量评估也希望有一定的保护机制
+
+结合系统指标和服务容量,<font color="#00FF00">希望能够自适应动态调整流量</font>  
+
+2.系统规则  
+![系统规则](resources/springcloud/44.png)  
+点击系统规则=>新增系统规则 
+进行系统规则的设置是不需要选择资源的,因为它是一种全局的配置规则  
+
+3.CPU使用率  
+根据当前服务所在的操作系统CPU的使用率进行控制,参数填入一个小数(百分比)
+
+4.RT  
+根据当前服务所有入口流量的平均RT阈值进行流控  
+
+5.线程数  
+根据当前服务所有入口流量的并发线程数达到阈值进行流控  
+
+6.入口QPS  
+当单台机器上所有入口流量的QPS达到阈值进行流控  
+
+### 5.9 sentinel持久化模式
+1.问题  
+sentinel默认的所有配置都是保存在内存当中的,一旦服务重启之后维护在sentinel中的配置全都丢失了  
+
+2.sentinel持久化模式  
+* 原始模式:应用重启之后规则就会消失,不能用于生产环境
+* 拉模式:将数据信息写入到本地文件
+* 推模式:生产环境下推荐使用该模式,这种模式的配置中心一般是nacos、zookpeer;数据推送的操作不由服务进行,而是由sentinel控制台统一进行管理然后推送到服务配置中心,接着配置中心将数据推送到sentinel数据源,sentinel数据源将数据更新到本地服务  
+  <font color="#00FF00">sentinel控制台->配置中心->sentinel数据源->sentinel</font>
+
+3.推模式  
+
+3.1 引入pom依赖  
+引入sentinel数据源到本地微服务依赖  
+```xml
+<dependency>
+    <groupId>com.alibaba.csp</groupId>
+    <artifactId>sentinel-datasource-extension</artifactId>
+</dependency>
+```
+
+3.2 nacos远程配置中心  
+由于使用远程配置中心存储数据,所以需要再nacos中创建一个远程配置用于保存sentinel中的配置信息  
+假设有如下配置  
+![nacos远程配置中心](resources/springcloud/45.png)  
+这段配置是手工的配置,表示对/order/flow接口进行限流  
+
+3.3 设置服务的yml  
+```yml
+server:
+  port: 8060
+spring:
+  application:
+    name: sentinel-alibaba
+  cloud:
+    sentinel:
+      transport:
+        # 配置dashboard地址
+        dashboard: 192.168.149.130:8858
+      web-context-unify: false
+      # dataSource是一个Map集合,可以回顾一下yml中如何编写Map集合
+      datasource:
+        # key:可以随意指定
+        flow-rule:
+          # 设置使用nacos配置中心,
+          nacos:
+            # 设置nacos的远程地址
+            server-addr: 192.168.149.130:8848
+            username: nacos
+            password: nacos
+            data-id: order-sentinel-flow-rule
+          # zk: 设置使用zookpeer配置中心
+          # consul: 设置使用consul配置中心
+```
+
+3.3 大坑  
+现在的这种配置太鸡肋了;还要人手动配置yml文件,并且如果通过sentinel的控制面板修改了一些配置文件它是不支持直接推送到nacos的  
+//todo 这里要补
+
+
+
+
+
+
+
+
+## 7.网关
+*注意:这里顺序乱了,这里还需要把P60看一下*
+
+
+
+
 
 
 
