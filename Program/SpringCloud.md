@@ -2,6 +2,7 @@
 1.服务注册中心  
 2.负载均衡器  
 3.远程调用  
+4.服务配置中心  
 5.服务降级  
 
 
@@ -556,6 +557,7 @@ spring:
 ## 3.远程调用
 **目录:**  
 3.1 Feign基本环境搭建  
+3.2 OpenFeign自定义配置  
 
 
 ### 3.1 Feign基本环境搭建
@@ -636,6 +638,7 @@ public interface StockFeignService {
 `@FeignClient`  
 * name:目标服务的名称(服务提供者的名称)
 * path:远程调用的前缀(这里正好和StockController接口对应上)
+* configuration:设置配置类(可以设置当前远程调用接口的日志级别)
 
 <font color="#FF00FF">所以这里的实现和JPA很类似,都是使用动态代理完成的;</font>
 
@@ -664,6 +667,267 @@ public class OrderController {
 访问地址[http://localhost:8081/api/order/add](http://localhost:8081/api/order/add)成功显示扣减库存8082  
 并且OpenFeign也是默认支持负载均衡的  
 
+### 3.2 OpenFeign自定义配置
+1.OpenFeign日志级别  
+OpenFeign有四种级别的日志  
+* NONE:不记录任何日志
+* BASIC:仅记录请求方法、URL、响应状态码以及执行时间
+* HEADERS:在BASIC的基础上记录请求和响应的header
+* FULL:记录请求和响应的header、body和元数据
+
+使用示例-<font color="#00FF00">全局配置</font>(所有远程调用都使用该日志配置):
+```java
+@Configuration
+public class FeignConfig {
+
+    @Bean
+    public Logger.Level feignLoggerLevel() {
+        return Logger.Level.FULL;
+    }
+
+}
+```
+由于Feign的日志受到SpringBoot的管理,并且Feign默认的输出级别是debug;所以仅仅这样还不够,这里还需要把Feign接口所在的包的日志级别设置为至少debug  
+在order-openfeign模块的yml添加如下配置
+```yml
+logging:
+  level:
+    io.github.cnsukidayo.cloud.order.feign: debug
+```
+测试运行,成功打印日志  
+
+使用示例-<font color="#00FF00">局部配置</font>(针对不同的OpenFeign接口使用不同的日志级别)  
+其实这里的配置类似3.1 通过配置类修改负载均衡策略=>@RibbonClients注解哪边的效果  
+提供一个配置类然后不把该配置类添加到容器中
+```java
+public class FeignConfig {
+
+    @Bean
+    public Logger.Level feignLoggerLevel() {
+        return Logger.Level.FULL;
+    }
+}
+```
+
+在远程调用接口StockFeignService的@FeignClient注解设置configuration为刚才的注解类  
+```java
+@FeignClient(name = "service-stock", path = "/api/stock/inner", configuration = FeignConfig.class)
+public interface StockFeignService {
+
+    @GetMapping("reduce")
+    String reduce();
+}
+```
+
+通过<font color="#00FF00">配置文件</font>完成Feign的日志配置  
+```yml
+feign:
+  client:
+    config:
+      service-stock: #对应的服务名,这里不是设置接口;是整个系统中只要调用的目标服务是该服务就使用如下配置
+        logger-level: full #设置日志等级为full
+```
+
+2.~~契约配置~~  
+*提示:后续的配置将只记录yml的局部配置方式,暂时略过全局的配置方式;如果有需要后续额可以加上.全局配置指的是通过Config类进行配置的方式*  
+
+*提示:之前说过OpenFeign是基于Feign的,使其支持SpringMVC注解*  
+原生Feign的注解中,使用@RequestLine来替代@RequestMapping,使用@Param来替代@PathVariable注解,如果需要兼容老版本的Feign不使用现在SpringMVC的注解,则可以使用契约配置,切换为原来的Feign注解  
+当然我们这里没这个需要,<font color="#00FF00">这节完全可以跳过</font>  
+
+配置类的配置方式:
+```java
+@Bean
+public Contract feignContract(){
+  return new Contract.Default();
+}
+```
+
+配置文件的配置方式:  
+```yml
+feign:
+  client:
+    config:
+      service-stock:
+      contract: feign.Contract.Default
+```
+
+3.超时时间配置  
+配置类方式  
+```java
+@Configuration
+public class FeignConfig {
+
+    @Bean
+    public Request.Options options() {
+      /*
+      args0:连接的超时时间(默认为2s)
+      args1:请求处理的超时时间(默认为5s)
+      */
+      return new Request.Options(5000,10000);
+    }
+}
+```
+
+配置文件:  
+```yml
+feign:
+  client:
+    config:
+      service-stock:
+        # 连接超时时间
+        connect-timeout: 5000
+        # 处理超时时间
+        read-timeout: 3000
+```
+
+4.配置请求拦截器  
+*解释:这里的拦截器意思是,在OpenFeign请求前做一些前置处理*  
+*提示:貌似没有响应拦截器*  
+实现`RequestInterceptor`接口并添加到容器中即可  
+
+配置类:
+```java
+@Component
+public class FeignAuthRequestInterceptor implements RequestInterceptor {
+    @Override
+    public void apply(RequestTemplate template) {
+        System.out.println("==============请求");
+        // 业务逻辑
+        String access_token = UUID.randomUUID().toString();
+        template.header("Authorization", access_token);
+    }
+}
+```
+
+配置文件:  
+```yml
+feign:
+  client:
+    config:
+      service-stock:
+        # 指定拦截器数组
+        request-interceptors:
+          # 配置拦截器的类全限定名
+          - io.github.cnsukidayo.cloud.order.config.FeignAuthRequestInterceptor
+```
+
+## 4.服务配置中心
+**目录:**  
+4.1 服务配置中心概念介绍  
+4.2 nacos配置管理界面  
+4.3 权限管理  
+4.4 读取配置中心文件  
+
+### 4.1 服务配置中心概念介绍
+1.服务注册中心特征  
+* 维护性:方便管理和维护,不需要记住每一个节点上有哪些配置信息;采用集中式管理
+* 时效性:配置更改完成立马生效,不需要重启
+* 安全性:不把配置文件信息放在应用本体中,保障了安全性;程序员只有开发环境的配置,没有生产环境的配置
+
+2.配置中心组件对比  
+目前配置中心的组件有:nacos、config、apollo
+* Spring Cloud Config 大部分场景需要结合git使用,动态变更还需要依赖Spring Cloud Bus消息总线来通知所有客户端信息变化
+* Spring Cloud Config不提供可视化界面
+* <font color="#00FF00">nacos config 使用长轮询更新配置,一旦配置有变动后通知服务的速度非常快</font>
+* apollo在功能上几乎和nacos差不多,<font color="#00FF00">但nacos的性能比apollo优秀很多</font>
+
+### 4.2 nacos配置管理界面
+1.命名空间  
+之前在1.3节已经讲过命名空间
+<font color="#FF00FF">命名空间的约定:产品线+环境</font> 例如这里有两个命名空间,淘宝-dev、天猫-test  
+![界面说明](resources/springcloud/8.png)
+
+2.配置组  
+*提示:配置组是基于命名空间的,即<font color="#00FF00">一个服务只能读取到它所在的命名空间下的配置</font>;远程调用的时候也只能调用该命名空间下面的服务列表*  
+
+![配置组](resources/springcloud/20.png)  
+* Data ID:可以按照项目来进行分组
+  例如当前在淘宝-dev这个命名空间下,有一个配置分组是live-common,代表这是直播项目的配置,其中Group指定为gift(表示这是礼物微服务的配置)
+  但实际上一般不会这么细致,一般Group都是使用默认
+  可以通过live-common、live-database的这种方式来区分配置;前者是直播项目的通用配置,后者是直播项目数据库的配置
+* Group:可以按照项目的服务来进行分组
+
+3.历史版本  
+![历史版本](resources/springcloud/21.png)  
+发布成功之后就可以看到配置信息了,接着点击历史版本可以看到所有的历史修改记录  
+![历史版本](resources/springcloud/22.png)  
+<font color="#00FF00">另外这里的监听查询可以监听当前配置文件有没有正确的推送到服务上</font>  
+
+4.克隆  
+还可以针对配置文件进行克隆
+![克隆](resources/springcloud/23.png)  
+
+### 4.3 权限管理
+1.用户列表  
+![用户列表](resources/springcloud/34.png)  
+可以点击左侧的用户列表->创建用户来新增用户  
+
+2.角色管理  
+![角色管理](resources/springcloud/35.png)  
+可以针对用户添加角色,例如这里为dev用户分配了dev_role角色  
+
+3.权限管理  
+![权限管理](resources/springcloud/36.png)  
+<font color="#00FF00">权限管理可以针对角色分配该角色在不同命名空间下的权限(分为只读、只写、读写权限)</font>  
+
+### 4.4 读取配置中心文件
+1.创建配置文件  
+这里还是使用4.2 nacos配置管理界面=>2.配置组=>live-common中的配置文件  
+
+2.修改pom文件  
+*提示:这里在service-stock模块中进行演示*  
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!--服务注册发现-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+    </dependency>
+
+</dependencies>
+```
+
+~~3.编写bootstrap.yml配置文件~~
+<font color="#FF00FF">使用配置中心必须使用bootstrap.yml/properties配置文件来配置nacos远程配置中心的地址</font>  
+```yml
+spring:
+  application:
+    # name必须设置为配置中心对应的Data Id的值
+    name: live-common
+  cloud:
+    nacos:
+      # 配置nacos服务器地址
+      server-addr: 192.168.230.225:8848
+      # 必须配置账户和密码
+      username: nacos
+      password: nacos
+      config:
+        # 设置命名空间
+        namespace: public
+        # 设置分组
+        group: DEFAULT_GROUP
+```
+
+*提示:新版已经不需要使用bootstrap.yml配置文件了,而且2.0的版本和1.0又对应不上,所以暂且跳过*  
+详情可以参考:[https://github.com/alibaba/spring-cloud-alibaba/blob/2.2.x/spring-cloud-alibaba-examples/nacos-example/readme-zh.md]([https://](https://github.com/alibaba/spring-cloud-alibaba/blob/2.2.x/spring-cloud-alibaba-examples/nacos-example/readme-zh.md))
+
+4.获取变量  
+实际上通过`application.getEnvironment().getProperty("key")`方法就可以获取到配置信息了;是不是TM的似曾相识?  
+
+
+
+
 
 ## 5.服务降级
 **目录:**  
@@ -686,7 +950,7 @@ public class OrderController {
 * 业务调用持续出现异常
 
 3.服务雪崩样例图  
-![服务雪崩](resources/springcloud/40.png)  
+![服务雪崩](resources/springcloud/24.png)  
 假设图中积分服务能承受的压力较小,当大量请求来到秒杀商品这条调用链时,最终会将积分服务打垮,从而导致大量的请求积压在商品服务;最终导致整个秒杀商品不可用  
 然而由于<font color="#00FF00">商品服务是别的服务的共享服务</font>最终会导致服务雪崩  
 <font color="#FF00FF">服务雪崩:因服务提供者不可用导致服务调用者的不可用,并将不可用逐渐放大的过程就叫服务雪崩效应</font>  
@@ -1040,7 +1304,7 @@ docker run -p 8858:8858 --name sentinelDashboard \
 ```
 
 3.访问sentinelDashBoard  
-![sentinel](resources/springcloud/41.png)  
+![sentinel](resources/springcloud/25.png)  
 账号密码都输入sentinel即可登陆  
 
 4.详情配置  
@@ -1062,13 +1326,13 @@ docker的配置方式暂时还没有找到
 
 6.配置启动参数  
 现在还需要配置服务启动时连接sentinel的地址,配置方式是使用Java运行时参数  
-![启动](resources/springcloud/42.png)  
+![启动](resources/springcloud/26.png)  
 `-Dcsp.sentinel.dashboard.server=192.168.149.130:8858`  
 修改为对应的IP+端口即可  
 
 7.启动测试  
 启动微服务并且随便访问一个接口,一段时间之后刷新sentinel就可以看到相关服务了  
-![启动测试](resources/springcloud/43.png)  
+![启动测试](resources/springcloud/27.png)  
 
 #### 5.3.2 SpringCloudAlibaba整合Sentinel
 1.创建sentinel-alibaba模块  
@@ -1126,17 +1390,17 @@ spring:
 
 4.启动测试  
 *同理还是需要先访问一下服务的接口,否则不会在sentinel中进行显示*  
-![启动测试](resources/springcloud/44.png)  
+![启动测试](resources/springcloud/28.png)  
 
 #### 5.3.3 流控规则
 提示:所有的规则都是服务于降级的,不能本末倒置  
 
 1.实时监控  
-![实时监控](resources/springcloud/45.png)  
+![实时监控](resources/springcloud/29.png)  
 <font color="#00FF00">用于实时监控所有服务调用情况的</font>  
 
 2.簇点链路  
-![簇点链路](resources/springcloud/46.png)  
+![簇点链路](resources/springcloud/30.png)  
 <font color="#00FF00">用于显示所有可以进行流控、降级规则设置的资源</font>  
 
 3.流控规则使用场景  
@@ -1146,7 +1410,7 @@ spring:
 
 4.流控规则  
 4.1 <font color="#00FF00">QPS</font>:设置QPS限制  
-![QPS](resources/springcloud/47.png)  
+![QPS](resources/springcloud/31.png)  
 这里新增了一个规则限制每秒的请求数量为2,当超过阈值后sentinel会返回默认的降级内容`Blocked by Sentinel (flow limiting)`  
 如果需要自定义返回降级内容,可以通过之前的5.2.2 @SentinelResource注解节的内容来自定义  
 
@@ -1240,7 +1504,7 @@ public class Result<T> {
 
 #### 5.3.4 流控模式
 **流控模式是流控规则的高级用法,点击流控规则的高级选项展开流控模式选项**  
-![流控模式](resources/springcloud/48.png)  
+![流控模式](resources/springcloud/32.png)  
 
 1.直接  
 默认选项,当资源名(资源名就是接口访问路径)超过阈值之后该接口就降级  
