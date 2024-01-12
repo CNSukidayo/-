@@ -818,6 +818,8 @@ feign:
 4.2 nacos配置管理界面  
 4.3 权限管理  
 4.4 读取配置中心文件  
+4.5 其它扩展配置  
+4.6 配置文件的优先级  
 
 ### 4.1 服务配置中心概念介绍
 1.服务注册中心特征  
@@ -872,6 +874,7 @@ feign:
 <font color="#00FF00">权限管理可以针对角色分配该角色在不同命名空间下的权限(分为只读、只写、读写权限)</font>  
 
 ### 4.4 读取配置中心文件
+*提示:4.4节和4.5节很多内容约定都发生了变化,因为是旧版教程所以新版需要自已判断一下*
 1.创建配置文件  
 这里还是使用4.2 nacos配置管理界面=>2.配置组=>live-common中的配置文件  
 
@@ -925,6 +928,117 @@ spring:
 4.获取变量  
 实际上通过`application.getEnvironment().getProperty("key")`方法就可以获取到配置信息了;是不是TM的似曾相识?  
 
+### 4.5 其它扩展配置
+1.读取配置文件类型  
+默认读取配置文件的时候会从properties中进行读取,修改bootstrap.yml配置文件来读取nacos配置中心的<font color="#00FF00">yml类型</font>的配置文件  
+但是如果使用下面将的第3步使用自定义DataId的方式读取配置文件时是不需要指定配置文件的类型的  
+```yml
+spring:
+  cloud:
+    nacos:
+      config:
+        file-extension: yaml
+```
+
+2.关闭动态刷新  
+*提示:默认nacos中的配置信息发生更改后,微服务可以在1s以内感知到并更新配置*
+可以通过以下配置来关闭动态刷新  
+```yml
+spring:
+  cloud:
+    nacos:
+      config:
+        # 此时微服务就不会从配置中心更新配置了
+        refresh-enabled: false
+```
+
+3.<font color="#00FF00">自定义Data ID</font>  
+在4.4 读取配置中心文件=>3.编写bootstrap.yml配置文件时提到过`spring.application.name`的配置必须设置为dataId的值,假设服务名不能设置为dataId的值;或者一个服务需要读取多个配置文件时可以使用<font color="#00FF00">shared-configs</font>或者<font color="#00FF00">extension-configs</font>  
+```yml
+spring:
+  application:
+    name: service-stock
+  cloud:
+    nacos:
+      # 配置nacos服务器地址
+      server-addr: 192.168.230.225:8848
+      # 必须配置账户和密码
+      username: nacos
+      password: nacos
+      config:
+        shared-configs:
+          - data-id: live-common
+            refresh: true
+            group: DEFAULT_GROUP
+          - data-id: live-data
+            refresh: true
+            group: DEFAULT_GROUP
+      # 不需要指定配置文件类型了
+        # file-extension: yaml
+        namespace: public
+```
+此示例为当前service-stock模块读取命名空间中namespace为public下data-id为live-common和live-data中的配置文件;并且后读取的live-data优先级会高于live-common  
+
+```yml
+spring:
+  application:
+    name: service-stock
+  cloud:
+    nacos:
+      # 配置nacos服务器地址
+      server-addr: 192.168.230.225:8848
+      # 必须配置账户和密码
+      username: nacos
+      password: nacos
+      config:
+        shared-configs:
+          - data-id: live-common
+            refresh: true
+            group: DEFAULT_GROUP
+          - data-id: live-data
+            refresh: true
+            group: DEFAULT_GROUP
+        # 不需要指定配置文件类型了
+        # file-extension: yaml
+        namespace: public
+        extension-configs[0]:
+          data-id: live-common
+          refresh: true
+          group: DEFAULT_GROUP
+        extension-configs[1]:
+          data-id: live-data
+          refresh: true
+          group: DEFAULT_GROUP
+```
+
+
+*提示:shared-configs和都是数组,在Spring中配置数组中有两种方式一种就是-另一种就是下标方式;此外<font color="#00FF00">shared-configs优先级要高于shared-configs</font>*
+
+4.@RefreshScope注解  
+将@Value注解标注在属性上读取到的远程配置是不会自动刷新的,如下  
+```java
+// 该配置不会自动刷新
+@Value("${test.name}")
+private String name;
+```
+
+此时需要配合@RefreshScope注解来进行使用  
+```java
+@RestController
+@RefreshScope
+public class TestController{
+    // 配置可以自动刷新
+    @Value("${test.name}")
+    private String name;
+}
+```
+
+### 4.6 配置文件的优先级
+todo
+
+
+
+
 
 
 
@@ -934,6 +1048,8 @@ spring:
 5.1 服务降级基本环境搭建  
 5.2 Sentinel上手体验  
 5.3 Sentinel控制台  
+5.4 流控规则  
+5.5 熔断规则  
 
 
 ### 5.1 服务降级基本环境搭建
@@ -1276,14 +1392,13 @@ public class HelloController {
 2.启动测试  
 演示效果是,第一次请求异常、第二次请求异常;第三次请求返回Json熔断  
 
-**<font color="#FF00FF">流控设置在服务提供者,降级设置在服务消费者</font>**
+**<font color="#FF00FF">流控设置在服务提供者,熔断设置在服务消费者</font>**
+在分布式系统中一个服务即可能作为服务消费者也可能作为服务提供者,当作为服务提供者时需要通过流控来<font color="#00FF00">保护自身</font>,当作为服务消费者时需要通过熔断来<font color="#00FF00">约束自身</font>  
 
 ### 5.3 Sentinel控制台
 **目录:**  
 5.3.1 Sentinel基本环境搭建  
 5.3.2 SpringCloudAlibaba整合Sentinel  
-5.3.3 流控规则  
-5.3.4 流控模式  
 
 #### 5.3.1 Sentinel基本环境搭建
 1.选择版本  
@@ -1392,7 +1507,13 @@ spring:
 *同理还是需要先访问一下服务的接口,否则不会在sentinel中进行显示*  
 ![启动测试](resources/springcloud/28.png)  
 
-#### 5.3.3 流控规则
+### 5.4 流控规则
+**目录:**  
+5.4.1 流控规则  
+5.4.2 流控模式  
+5.4.3 流控效果  
+
+#### 5.4.1 流控规则
 提示:所有的规则都是服务于降级的,不能本末倒置  
 
 1.实时监控  
@@ -1502,7 +1623,7 @@ public class Result<T> {
 }
 ```
 
-#### 5.3.4 流控模式
+#### 5.4.2 流控模式
 **流控模式是流控规则的高级用法,点击流控规则的高级选项展开流控模式选项**  
 ![流控模式](resources/springcloud/32.png)  
 
@@ -1528,7 +1649,11 @@ flowchart TB
 <font color="#00FF00">sentinel不仅可以对接口进行流控还可以对业务方法进行流控</font>  
 此时如果对getUser接口进行流控则最终test1和test2都会受到影响,如果只希望test2受到影响而test1不受影响就可以使用链路  
 同理在配置的时候,因为对getUser进行限流,所以就在getUser资源上配置限流规则;一旦getUser到达阈值后<font color="#00FF00">对链路test2进行限流</font>  
-![链路](resources/springcloud/49.png)  
+![链路](resources/springcloud/33.png)  
+总结:在所有进入getUser的调用链中,一旦getUser达到阈值,则对入口/test2进行流控  
+<font color="#00FF00">链路和关联正好相反</font>:  
+关联=> 对关联资源判断->限制当前资源
+链路=> 对当前资源判断->限制入口资源
 
 3.1 创建controller  
 ```java
@@ -1564,7 +1689,8 @@ public class UserService {
     }
 }
 ```
-注意该Service被@SentinelResource注解标注(sentinel支持对service层的方法流控),资源名称是getUser  
+注意该Service被@SentinelResource注解标注(<font color="#00FF00">sentinel支持对service层的方法流控</font>),资源名称是getUser  
+*提示:这里由于使用了@SentinelResource注解,所以该方法被流控的话不会走sentinel默认的降级处理;也不会走全局的降级处理方法,会返回500;如果需要自定义可以使用之前的blockHandler属性来指定降级方法*
 
 3.3 修改yml配置文件
 ```yml
@@ -1577,6 +1703,40 @@ spring:
 
 3.4 测试运行  
 结果显示,当流量达到getUser方法的阈值之后test2方法将被流控而test1方法不会  
+
+
+#### 5.4.3 流控效果  
+**流控效果是流控规则的高级用法,点击流控规则的高级选项展开流控效果选项**  
+![流控效果](resources/springcloud/32.png)  
+
+1.快速失败  
+默认的流控效果,当流控接口达到降级阈值之后会直接放弃这部分流量  
+
+2.Warm up  
+在该界面下要求输入一个<font color="#00FF00">预热时长</font>;这是为了避免洪峰流量到来一下子打垮系统,而是让流量慢慢进入系统从而让系统<font color="#00FF00">冷启动</font>  
+假设QPS设置为10,预热时长设置为5;那么当流量到来时不是一下子打到10,而是在这5s之内慢慢递增到10  
+递增的时候遵循如下公式:  
+<font color="#00FF00">冷加载因子</font>默认为3,最开始只能接受<font color="#00FF00">QPS/冷加载因子</font>量的请求,如果最开始请求量超出这个值则系统进行流控拒绝请求,经过设定的<font color="#00FF00">预热时长</font>之后逐渐升至设定的QPS阈值  
+
+3.排队等待  
+在该界面下要求输入一个<font color="#00FF00">超时时间</font>;假设这里QPS设置为10,超时时间设置为5,当洪峰流量到来时假设为20;那么系统不会立即放弃这部分流量,而是会保留这部分流量5s,尝试在接下来的5s之内能够消化这部分流量,如果消化不了则再返回异常  
+Wram Up用于处理激增流量,而排队等待用于处理脉冲流量  
+* 激增流量:系统运行平稳,突然出现大量的请求量,之后流量又回归平稳
+* 脉冲流量:系统运行平稳,突然出现很高的请求量,之后回归平稳,一段时间后再次出现很高的请求量  
+
+![图示](resources/springcloud/37.png)  
+那么脉冲流量就有这么一个特点,每次脉冲到来之间会有一段间隔时间,排队等待的思想就是利用这段间隔时间,将部分流量转移到这段时间进行处理;即所谓的<font color="#FF00FF">削峰填谷</font>  
+
+4.面试题  
+* 如何判断流量是激增流量还是脉冲流量?(自已想的)
+  感觉可以从业务角度先分析一波,然后还可以通过流量监控工具进行分析,分析之后能将分析结果立即应用于接口
+* 如何设置排队等待的时长
+  其实可以从用户的视角来看排队等待,即一个系统能提供的QPS是固定的;即一个请求最大允许等待多长时间,其实排队等待时间不能设置的太长
+
+### 5.5 熔断降级规则
+1.进入熔断设置页面  
+![熔断页面](resources/springcloud/38.png)  
+点击簇点链路=>选择资源=>降级  
 
 
 
