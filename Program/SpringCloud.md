@@ -2034,6 +2034,53 @@ spring:
 //todo 这里要补
 
 
+## 6.分布式事务
+6.1 分布式事务基本概念介绍  
+6.2 seata基本环境搭建  
+
+### 6.1 分布式事务基本概念介绍
+1.Seata介绍  
+Seata提供了高性能和简单易用的分布式事务,seata提供了AT、TCC、SAGA、XA事务模式.AT模式是阿里首推的模式,阿里云分布式事务的收费版本是GTS  
+[SeataGitHub](https://github.com/apache/incubator-seata)
+[Seata官网](https://seata.io/zh-cn/)  
+
+2.分布式事务解决方案  
+可以参看MySQL笔记2.事务=>2.5 分布式事务  
+
+3.AT模式  
+AT模式(auto transaction)是一种无侵入式的分布式事务解决方案  
+AT模式类似<font color="#00FF00">二阶段提交</font>  
+
+**AT是如何做到对业务的无侵入:**  
+* 在一阶段(准备阶段)seata会拦截业务SQL,首先解析SQL语义,找到业务SQL要更新的业务数据,在业务数据被更新之前将其保存为`before image`(类似二阶段提交的undo日志,通过before image可以实现数据的回滚),然后执行业务SQL更新业务数据,在业务数据更新完成之后,再将更新的数据保存成`after image`(类似二阶段提交的redo日志)最后生成<font color="#00FF00">行锁-写锁</font>,以上操作全部在一个数据库事务内完成,这样保障了一阶段操作的原子性
+* 二阶段提交:因为业务SQL在一阶段已经提交至数据库,所以seata框架只需要将一阶段保存的快照数据和行锁删掉,完成数据清理即可
+* 二阶段回滚:如果二阶段操作是回滚的话,seata就需要回滚一阶段已经执行的业务SQL,回滚方式就是使用`before image`(undo);但在还原前要首先校验脏写,对比数据库当前的数据与after image是否一致,如果一致的话就说明没有脏写可以还原数据,如果不一致就说明有脏写,此时就需要转人工处理
+  还原的时候是通过`before image`生成逆向SQL来还原数据
+
+4.三个角色  
+在seata架构中一共有三个角色  
+* 事务协调者(TC):维护全局和分支事务的状态,驱动全局事务提交或回滚
+* 事务管理器(TM):定义全局事务的范围,开始全局事务、提交或回滚全局事务
+* 资源管理器(RM):管理分支事务处理的资源,与TC交谈以注册分支事务和报告分支事务的状态,并驱动分支事务提交或回滚
+
+<font color="#00FF00">其中TC为单独部署的服务,TM和RM由微服务集成</font>
+
+### 6.2 seata基本环境搭建
+1.选择版本  
+按照alibaba提供的版本说明进行下载[https://github.com/alibaba/spring-cloud-alibaba/wiki/版本说明](https://github.com/alibaba/spring-cloud-alibaba/wiki/%E7%89%88%E6%9C%AC%E8%AF%B4%E6%98%8E) 
+
+2.下载seata  
+SeataDocker地址:[https://hub.docker.com/r/seataio/seata-server](https://hub.docker.com/r/seataio/seata-server)  
+
+3.Seata数据持久化方式  
+Seata数据持久化支持三种方式  
+* file:默认单机模式,全局事务会话信息保存在内存中,当事务完成后会持久化到本地的root.data文件中,性能较高;<font color="#00FF00">但这种模式不支持seata集群</font>(因为数据只保存在单机上)
+* db:高可用模式,全局事务信息通过db共享,相应的性能差一些
+* redis:性能较高,存在事务信息丢失风险;需要配置适合当前场景的redis持久化配置
+  *如果事务这样的信息存放在redis或MySQL中,那么MySQL宕机是没有redis可怕的,毕竟MySQL拥有二阶段提交机制,redis可没有;但redis有相关的持久化机制,可以具体选择;redis持久化机制见redis笔记*
+
+
+
 
 
 
@@ -2043,7 +2090,8 @@ spring:
 ## 7.网关
 *注意:这里顺序乱了,这里还需要把P60看一下*
 
-
+**目录:**  
+7.1 
 
 
 
