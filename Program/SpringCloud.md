@@ -1266,7 +1266,53 @@ flowchart TB
 同理在配置的时候,因为对getUser进行限流,所以就在getUser资源上配置限流规则;一旦getUser到达阈值后<font color="#00FF00">对链路test2进行限流</font>  
 ![链路](resources/springcloud/49.png)  
 
+3.1 创建controller  
+```java
+@RestController
+@RequestMapping("/sentinel")
+public class TestController {
 
+    private final UserService userService;
+
+    public TestController(UserService userService) {
+        this.userService = userService;
+    }
+
+    @GetMapping("test1")
+    public String test1() {
+        return userService.getUser();
+    }
+
+    @GetMapping("test2")
+    public String test2() {
+        return userService.getUser();
+    }
+}
+```
+
+3.2 编写service  
+```java
+@Service
+public class UserService {
+    @SentinelResource(value = "getUser")
+    public String getUser() {
+        return "getUser";
+    }
+}
+```
+注意该Service被@SentinelResource注解标注(sentinel支持对service层的方法流控),资源名称是getUser  
+
+3.3 修改yml配置文件
+```yml
+spring:
+  cloud:
+    sentinel:
+      # 将这个设置为false即可
+      web-context-unify: false
+```
+
+3.4 测试运行  
+结果显示,当流量达到getUser方法的阈值之后test2方法将被流控而test1方法不会  
 
 
 
