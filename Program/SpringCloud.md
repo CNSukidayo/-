@@ -2104,10 +2104,13 @@ docker run \
 --name seata-server \
 -p 8091:8091 \
 -p 7091:7091 \
+-e SEATA_IP=192.168.149.131 \
 -v ~/software/seata-server/resources:/seata-server/resources \
 -v ~/software/seata-server/sessionStore:/seata-server/sessionStore \
 -d seataio/seata-server:1.3.0
 ```
+* `-e SEATA_IP=192.168.149.131` 这一步的IP必须指定为宿主机的IP
+* `-p` 端口号最好不要修改
 关于修改seata的配置见步骤4  
 
 *提示:*  
@@ -2158,7 +2161,7 @@ store{
 ```
 
 5.修改seata的nacos配置  
-*提示:seata是强依赖nacos服务注册中心的*  
+*提示:seata服务的注册中心配置和配置中心配置是可以分下来的*  
 * 微服务通过与<font color="#00FF00">seata集群</font>交互来完成分布式事务,微服务如何感知seata集群以及微服务如何负载均衡地调用seata集群,就是通过nacos注册中心来完成的,所以这里需要将seata注册到nacos中  
 * <font color="#00FF00">同理seata集群之间的配置也是需要使用nacos配置中心进行同步的</font>,假设seata的配置需要发送改变时就不需要手动更改每一台seata的配置了  
 
@@ -2166,6 +2169,7 @@ store{
 ![示意图](resources/springcloud/47.png)  
 回到宿主机的挂载目录下,进入resource目录下,备份registry.conf配置文件,并修改改文件内容如下:  
 ```shell
+# 设置注册中心的配置
 registry {
   type = "nacos"
   # loadBalancer = "RandomLoadBalance"
@@ -2183,6 +2187,7 @@ registry {
     password = "nacos"
   }
 }
+# 设置配置中心的配置
 config {
   type = "nacos"
   nacos {
@@ -2427,9 +2432,12 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional
     public void add(Order order) {
         orderMapper.insert(order);
         stockFeign.reduce(order.getProductId());
+        // 在没有使用分布式事务前,这里会导致订单表回滚,但库存表修改成功
+        int i = 1 / 0;
     }
 }
 ```
@@ -2570,7 +2578,92 @@ public interface StockMapper {
 ### 6.4 seata实现分布式事务
 *提示6.4节的内容基于6.3的环境*  
 
+1.添加seata依赖  
+```xml
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-seata</artifactId>
+</dependency>
+```
 
+2.为每个微服务的数据库添加undo_log表  
+这里为seata-order和seata-stock数据库添加该表  
+该表的SQL定义:[https://github.com/apache/incubator-seata/blob/1.3.0/script/client/at/db/mysql.sql](https://github.com/apache/incubator-seata/blob/1.3.0/script/client/at/db/mysql.sql)  
+[点击预览undo_log.sql](resources/springcloud/undo_log.sql)  
+![SQL](resources/springcloud/56.png)  
+
+3.配置事务分组  
+事务分组详情见:6.2 seata基本环境搭建=>6.创建config.txt配置文件=>事务分组与高可用  
+<font color="#00FF00">当时配置的事务分组是guangzhou</font>  
+
+修改两个子模块的yml配置文件添加如下内容:  
+```yml
+spring:
+  application:
+    alibaba:
+      seata:
+        # 设置事务分组为guangzhou
+        tx-service-group: guangzhou
+```
+
+还有另外一种配置方法是放到seata下面配置,正好和下面的第4步配置对应起来,这种配置方式好一点  
+```yml
+seata:
+  # 设置事务分组为guangzhou
+  tx-service-group: guangzhou
+  service:
+    # vgroup-mapping是一个Map
+    vgroup-mapping:
+      # key为分组事务名,value就是之前在6.2 seata基本环境搭建=>7.将config.txt配置文件推送到nacos中配置的value
+      guangzhou: default
+```
+
+4.配置seata服务  
+因为微服务需要与seata服务进行通讯才能完成分布式事务,而seata又是注册在nacos中的,所以这里需要配置当前微服务要与nacos中配置的哪个seata服务通讯  
+<font color="#00FF00">此外这里还需要配置seata的配置中心</font>
+之前在6.2 seata基本环境搭建=>7.将config.txt配置文件推送到nacos 推送到nacos的配置中一部分是seata服务的配置,还有一部分是seata客户端的配置
+
+```yml
+seata:
+  registry:
+    # 表明seata服务注册在nacos中,因为seata可以注册在很多不同的注册中心
+    type: nacos
+    nacos:
+      # 配置nacos的地址(这里不要混淆,虽然上面已经配置过nacos的地址了,不代表这里不用配置;想想如果seata注册在zookpeer中呢?)
+      # 上面配置的nacos是当前服务要注册到的注册中心的地址
+      server-addr: 192.168.149.131:8870
+      # seata在nacos中注册的名称(可以在nacos控制面板->服务列表里看到)
+      application: seata-server
+      # group: SEATA_GROUP 配置seata的group
+      username: nacos
+      password: nacos
+  config:
+    type: nacos
+    nacos:
+      server-addr: 192.168.149.131:8870
+      username: nacos
+      password: nacos
+      # group: SEATA_GROUP 这里分分组配置要注意,有可能不是默认值
+```
+
+5.修改@Transaction注解为@GlobalTransaction注解  
+修改OrderServiceImpl中的add方法如下  
+```java
+@GlobalTransactional
+@Override
+public void add(Order order) {
+    orderMapper.insert(order);
+    stockFeign.reduce(order.getProductId());
+    int i  = 1 / 0;
+}
+```
+
+6.测试运行  
+访问:[http://localhost:8081/api/order/add/100](http://localhost:8081/api/order/add/100)  
+控制台打印除零异常,查看数据库发现没有插入订单也没有更新库存,成功yes!  
+![运行效果](resources/springcloud/57.png)  
+
+*注意这里有很多坑,如果出现读取不到nacos中服务的问题,有可能是group和nacos中配置的不一样,一定要注意观察对应nacos中的配置*
 
 
 
