@@ -189,6 +189,7 @@ nacos默认使用的数据库是内嵌的derby数据库,这是一种内存型的
 使用Navicat连接数据库并创建nacos数据库,在该数据库下运行nacos官方提供的建表SQL;
 这个建表语句一般可以进入nacos容器后在conf目录下找到scheme.sql(可以先创建一个nacos然后拿到该版本的SQL建表语句之后再删除该nacos)  
 也可以访问 [https://github.com/alibaba/nacos/blob/master/distribution/conf/mysql-schema.sql](https://github.com/alibaba/nacos/blob/master/distribution/conf/mysql-schema.sql)来获取[SQL建表语句](resources/springcloud/mysql-schema.sql)  
+<font color="#00FF00">注意这里有坑,数据库的字符编码不能随便设置</font>
 
 **运行后效果如下图所示:**  
 ![运行效果](resources/springcloud/12.png)  
@@ -2037,6 +2038,8 @@ spring:
 ## 6.分布式事务
 6.1 分布式事务基本概念介绍  
 6.2 seata基本环境搭建  
+6.3 seata客户端搭建  
+6.4 seata实现分布式事务  
 
 ### 6.1 分布式事务基本概念介绍
 1.Seata介绍  
@@ -2072,6 +2075,45 @@ AT模式类似<font color="#00FF00">二阶段提交</font>
 2.下载seata  
 SeataDocker地址:[https://hub.docker.com/r/seataio/seata-server](https://hub.docker.com/r/seataio/seata-server)  
 
+2.1 启动docker容器  
+```shell
+docker run \
+--name seata-server \
+-p 8091:8091 \
+-p 7091:7091 \
+-d seataio/seata-server:1.3.0
+```
+
+2.2 创建宿主机文件夹  
+```shell
+mkdir -p ~/software/seata-server/sessionStore
+mkdir -p ~/software/seata-server/resources
+```
+
+2.3 将docker配置文件拷贝到宿主机  
+```shell
+docker cp [seataContainId]:/seata-server/resources ~/software/seata-server/resources
+docker cp [seataContainId]:/seata-server/sessionStore ~/software/seata-server/sessionStore
+```
+
+2.4 删除容器  
+
+2.5 重新启动容器并挂载验证容器是否启动成功  
+```shell
+docker run \
+--name seata-server \
+-p 8091:8091 \
+-p 7091:7091 \
+-v ~/software/seata-server/resources:/seata-server/resources \
+-v ~/software/seata-server/sessionStore:/seata-server/sessionStore \
+-d seataio/seata-server:1.3.0
+```
+关于修改seata的配置见步骤4  
+
+*提示:*  
+进入seata容器命令:`docker exec -it [seataContainerId] sh`  
+
+
 3.Seata数据持久化方式  
 Seata数据持久化支持三种方式  
 * file:默认单机模式,全局事务会话信息保存在内存中,当事务完成后会持久化到本地的root.data文件中,性能较高;<font color="#00FF00">但这种模式不支持seata集群</font>(因为数据只保存在单机上)
@@ -2079,15 +2121,461 @@ Seata数据持久化支持三种方式
 * redis:性能较高,存在事务信息丢失风险;需要配置适合当前场景的redis持久化配置
   *如果事务这样的信息存放在redis或MySQL中,那么MySQL宕机是没有redis可怕的,毕竟MySQL拥有二阶段提交机制,redis可没有;但redis有相关的持久化机制,可以具体选择;redis持久化机制见redis笔记*
 
+4.修改seata数据持久化方式  
+<font color="#00FF00">这里采用db方式进行数据持久化</font>
+
+**创建seata数据库**  
+启动数据库,并在数据库中创建一个seata数据库
+从seata的github上下载建表语句:[https://github.com/apache/incubator-seata/tree/1.3.0/script/server/db](https://github.com/apache/incubator-seata/tree/1.3.0/script/server/db)  
+![资源目录](resources/springcloud/46.png)  
+使用图中的 [mysql.sql](resources/springcloud/mysql(seata).sql) 语句使用Navicat进行运行即可
 
 
+**修改配置文件**
+回到宿主机的挂载目录下,进入resource目录下,备份file.conf配置文件,并修改改文件内容如下:  
 
+```shell
+store{
+  mode = "db"
+  db {
+    datasource = "druid"
+    dbType = "mysql"
+    driverClassName = "com.mysql.jdbc.Driver"
+    # 设置数据库连接地址
+    url = "jdbc:mysql://192.168.149.131:7901/seata"
+    # 设置账号密码
+    user = "root"
+    password = "root"
+    minConn = 5
+    maxConn = 30
+    globalTable = "global_table"
+    branchTable = "branch_table"
+    lockTable = "lock_table"
+    queryLimit = 100
+    maxWait = 5000
+  }
+}
+```
+
+5.修改seata的nacos配置  
+*提示:seata是强依赖nacos服务注册中心的*  
+* 微服务通过与<font color="#00FF00">seata集群</font>交互来完成分布式事务,微服务如何感知seata集群以及微服务如何负载均衡地调用seata集群,就是通过nacos注册中心来完成的,所以这里需要将seata注册到nacos中  
+* <font color="#00FF00">同理seata集群之间的配置也是需要使用nacos配置中心进行同步的</font>,假设seata的配置需要发送改变时就不需要手动更改每一台seata的配置了  
+
+示意图如下:  
+![示意图](resources/springcloud/47.png)  
+回到宿主机的挂载目录下,进入resource目录下,备份registry.conf配置文件,并修改改文件内容如下:  
+```shell
+registry {
+  type = "nacos"
+  # loadBalancer = "RandomLoadBalance"
+  nacos {
+    application = "seata-server"
+    # 这里指定nacos的地址,线上环境中这里可以使用nacos集群的地址(nginx配置的地址)
+    serverAddr = "192.168.149.131:8870"
+    # 指定分组
+    group = "SEATA_GROUP"
+    # 指定命名空间
+    namespace = ""
+    cluster = "default"
+    # 指定nacos的用户
+    username = "nacos"
+    password = "nacos"
+  }
+}
+config {
+  type = "nacos"
+  nacos {
+    serverAddr = "192.168.149.131:8870"
+    namespace = ""
+    group = "SEATA_GROUP"
+    username = "nacos"
+    password = "nacos"
+  }
+}
+```
+
+6.创建config.txt配置文件  
+在当前的resource目录下新建config.txt配置文件,内容可以从[https://github.com/apache/incubator-seata/tree/1.3.0/script/config-center](https://github.com/apache/incubator-seata/tree/1.3.0/script/config-center)获取  
+[点击预览config.txt](resources/springcloud/config.txt)  
+![下载地址](resources/springcloud/48.png)  
+该配置文件的作用是初始化nacos配置中心,待会需要将该配置文件推送到nacos  
+<font color="#00FF00">这个配置文件太恶心了,高版本不需要改配置文件</font>  
+
+主要修改以下部分的内容:  
+```properties
+# 事务分组,主要用于解决异地机房停电容错,这里my_test_tx_group可以设置为guangzhou,即service.vgroupMapping.guangzhou=default 不是把后面的default改为广州;配置完成之后对应的客户端也需要进行设置;后面的这个default必须等于上面registry.conf配置文件中cluster = "default"的值
+service.vgroupMapping.guangzhou=default
+store.db.dbType=mysql
+store.db.driverClassName=com.mysql.jdbc.Driver
+store.db.url=jdbc:mysql://192.168.149.131:7901/seata?useUnicode=true
+store.db.user=root
+store.db.password=root
+```
+
+**事务分组与高可用**  
+![事务分组](resources/springcloud/49.png)  
+<font color="#00FF00">不同的seata集群就可以设置不同的事务分组</font>,例如这里seata1和seata2设置的事务分组为guangzhou;seata3和seata4设置的事务分组为shanghai  
+
+微服务客户端就可以通过如下配置来选择使用哪一个事务分组  
+```properties
+seata.tx-service-group=projectA
+seata.service.vgroup-mapping.projectA=Guangzhou
+```
+假设guangzhou的集群断电了,那就可以通过配置文件快速切换到上海  
+```properties
+seata.service.vgroup-mapping.projectA=Shanghai
+```
+![切换分组](resources/springcloud/50.png)  
+
+7.将config.txt配置文件推送到nacos  
+这里需要使用官方的脚本文件进行推送,下载地址: [https://github.com/apache/incubator-seata/tree/1.3.0/script/config-center/nacos](https://github.com/apache/incubator-seata/tree/1.3.0/script/config-center/nacos)  
+文件可以预览:resources/springcloud/nacos-config.sh  
+把脚本文件复制到虚拟机resources目录下  
+运行脚本文件  
+`sh nacos-config.sh -h [nacosIP地址] -p [nacosPort] -g [group] -t [namespace]`  
+* nacosIP地址:远端的nacosIP地址
+* nacosPort:远端的nacos端口
+* group:要推送到哪个分组下面
+* namespace:对应nacos命名空间ID字段,如果不写就是public;命名空间ID字段是那个UUID
+
+`sh nacos-config.sh -h 192.168.149.131 -p 8870 -g DEFAULT_GROUP ` 
+注意这里还有个小坑,现在脚本文件和config.txt文件是放在一个目录下的都在resources目录下,需要把脚本文件nacos-config.sh放到config.txt的子级目录下,这里在resources目录下创建一个script目录,接着将nacos-config.sh文件移至该目录下;再次之前上述命令
+
+运行后的效果如下  
+![运行效果](resources/springcloud/52.png)  
+*一共有8页全是一项一项的配置特别恶心,但是没办法它就是这么玩的;<font color="#00FF00">新版本不会有这个问题</font>*  
+
+8.重启seata  
+查看nacos可以看到seata-server已经注册到nacos中  
+![注册成功](resources/springcloud/53.png)  
+
+### 6.3 seata客户端搭建
+1.创建数据库  
+创建seata_order和seata_stock数据库并在数据库中分别创建order_tbl和stock_tbl代表订单表和库存表,表定义如下  
+```sql
+CREATE TABLE `seata_order`.`order_tbl`  (
+  `id` int NOT NULL COMMENT '订单id',
+  `product_id` int NULL DEFAULT NULL COMMENT '商品id',
+  `total_amount` int NULL DEFAULT NULL COMMENT '金额',
+  `status` int NULL DEFAULT NULL COMMENT '状态',
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+```
+```sql
+CREATE TABLE `seata_stock`.`stock_tbl`  (
+  `id` int NOT NULL COMMENT '库存id',
+  `product_id` int NULL DEFAULT NULL COMMENT '商品id',
+  `count` int NULL DEFAULT NULL COMMENT '库存数量',
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+```
+在stock表中插入一条数据  
+`INSERT INTO seata_stock.stock_tbl (id, product_id, count) VALUES (1, 9, 100)`
+
+2.创建两个子模块  
+分别创建seata-order和seata-stock模块  
+
+3.修改pom  
+将两个子模块的pom文件均修改为如下内容  
+```xml
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.mybatis.spring.boot</groupId>
+        <artifactId>mybatis-spring-boot-starter</artifactId>
+        <version>2.1.4</version>
+    </dependency>
+
+    <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>com.alibaba</groupId>
+        <artifactId>druid-spring-boot-starter</artifactId>
+        <version>1.2.3</version>
+    </dependency>
+
+    <!--服务注册发现-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-openfeign</artifactId>
+    </dependency>
+
+</dependencies>
+```
+
+4.创建yml配置文件  
+修改两个子模块的yml配置文件如下,要改的记得改一下  
+```yml
+server:
+  port: 8081
+spring:
+  application:
+    name: seata-order
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.149.131:8870
+        username: nacos
+        password: nacos
+        namespace: public
+  datasource:
+    driverClassName: com.mysql.jdbc.Driver
+    username: root
+    password: root
+    url: jdbc:mysql://192.168.149.131:7901/seata_order?useUnicode=true&characterEncoding=utf8&characterSetResults=utf8&useSSL=false
+mybatis:
+  mapper-locations: classpath:mybatis/*.xml
+  type-aliases-package: io.github.cnsukidayo.order.entity
+  configuration:
+    map-underscore-to-camel-case: true
+```
+
+5.创建主启动类  
+seata-order模块  
+```java
+@SpringBootApplication
+@MapperScan(basePackages = "io.github.cnsukidayo.order.dao")
+@EnableFeignClients
+public class SeataOrderApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(SeataOrderApplication.class,args);
+    }
+}
+```
+
+seata-stock模块  
+```java
+@SpringBootApplication
+@MapperScan(basePackages = "io.github.cnsukidayo.stock.dao")
+@EnableFeignClients
+public class SeataStockApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(SeataStockApplication.class, args);
+    }
+}
+```
+
+6.编辑seata-order模块  
+
+6.1 创建controller  
+```java
+@RestController
+@RequestMapping("/api/order")
+public class OrderController {
+
+    private final OrderService orderService;
+
+    public OrderController(OrderService orderService) {
+        this.orderService = orderService;
+    }
+
+    @GetMapping("add/{id}")
+    public void add(@PathVariable("id") Integer id) {
+        Order order = new Order();
+        order.setId(id);
+        order.setProductId(9);
+        order.setTotalAmount(100);
+        order.setStatus(0);
+        orderService.add(order);
+    }
+
+}
+```
+
+6.2 创建service  
+```java
+public interface OrderService {
+    List<Order> list();
+    void add(Order order);
+}
+```
+对应的实现类  
+```java
+@Service
+public class OrderServiceImpl implements OrderService {
+
+    private final OrderMapper orderMapper;
+    private final StockFeign stockFeign;
+
+    public OrderServiceImpl(OrderMapper orderMapper,
+                            StockFeign stockFeign) {
+        this.orderMapper = orderMapper;
+        this.stockFeign = stockFeign;
+    }
+
+    @Override
+    public List<Order> list() {
+        return orderMapper.list();
+    }
+
+    @Override
+    public void add(Order order) {
+        orderMapper.insert(order);
+        stockFeign.reduce(order.getProductId());
+    }
+}
+```
+
+6.3 创建dao  
+```java
+public interface OrderMapper {
+    List<Order> list();
+    void insert(Order order);
+}
+```
+
+6.4 创建entity实体类  
+```java
+public class Order {
+
+    private Integer id;
+
+    private Integer productId;
+
+    private Integer totalAmount;
+
+    private Integer status;
+    // 提供getter/setter方法
+}
+```
+
+6.5 创建远程调用接口  
+```java
+@FeignClient(name = "seata-stock", path = "/api/stock")
+public interface StockFeign {
+    @GetMapping("reduce/{productId}")
+    void reduce(@PathVariable("productId") Integer productId);
+}
+```
+
+6.6 创建对应的mapper  
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.cnsukidayo.order.dao.OrderMapper">
+
+    <select id="list" resultType="Order">
+        select *
+        from order_tbl;
+    </select>
+
+    <insert id="insert" parameterType="Order">
+        insert into order_tbl(id, product_id, total_amount, status)
+        VALUES (#{id}, #{productId}, #{totalAmount}, #{status})
+    </insert>
+</mapper>
+```
+
+**seata-order模块最终效果大致如下:**  
+![最终效果](resources/springcloud/54.png)  
+
+7.编辑seata-stock模块  
+
+7.1 创建controller  
+```java
+@RestController
+@RequestMapping("/api/stock")
+public class StockController {
+
+    private final StockService stockService;
+
+    public StockController(StockService stockService) {
+        this.stockService = stockService;
+    }
+
+    @GetMapping("reduce/{productId}")
+    public void reduce(@PathVariable("productId") Integer productId) {
+        stockService.reduce(productId);
+    }
+}
+```
+
+7.2 创建service  
+```java
+public interface StockService {
+    void reduce(Integer productId);
+}
+```
+对应的实现  
+```java
+@Service
+public class StockServiceImpl implements StockService {
+
+    private final StockMapper stockMapper;
+
+    public StockServiceImpl(StockMapper stockMapper) {
+        this.stockMapper = stockMapper;
+    }
+
+    @Override
+    public void reduce(Integer productId) {
+        stockMapper.reduce(productId);
+    }
+}
+```
+
+7.3 创建entity  
+```java
+public class Stock {
+
+    private Integer id;
+    private Integer productId;
+    private Integer count;
+    // 提供getter/setter
+}
+```
+
+7.4 创建dao  
+```java
+@Mapper
+public interface StockMapper {
+    void reduce(@Param("productId") Integer productId);
+}
+```
+
+7.5 创建mapper  
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.cnsukidayo.stock.dao.StockMapper">
+    <select id="reduce">
+        update stock_tbl
+        set count = count - 1
+        where product_id = #{productId}
+    </select>
+</mapper>
+```
+
+**seata-stock模块最终效果大致如下:**  
+![seata-stock](resources/springcloud/55.png)  
+
+### 6.4 seata实现分布式事务
+*提示6.4节的内容基于6.3的环境*  
 
 
 
 
 
 ## 7.网关
+
 *注意:这里顺序乱了,这里还需要把P60看一下*
 
 **目录:**  
