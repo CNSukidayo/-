@@ -1423,7 +1423,9 @@ docker pull bladex/sentinel-dashboard:1.8.0
 
 运行容器:  
 ```shell
-docker run -p 8858:8858 --name sentinelDashboard \
+docker run \
+-p 8858:8858 \
+--name sentinelDashboard \
 -d bladex/sentinel-dashboard:1.8.0
 ```
 
@@ -2040,6 +2042,7 @@ spring:
 6.2 seata基本环境搭建  
 6.3 seata客户端搭建  
 6.4 seata实现分布式事务  
+6.5 seata原理  
 
 ### 6.1 分布式事务基本概念介绍
 1.Seata介绍  
@@ -2132,7 +2135,8 @@ Seata数据持久化支持三种方式
 从seata的github上下载建表语句:[https://github.com/apache/incubator-seata/tree/1.3.0/script/server/db](https://github.com/apache/incubator-seata/tree/1.3.0/script/server/db)  
 ![资源目录](resources/springcloud/46.png)  
 使用图中的 [mysql.sql](resources/springcloud/mysql(seata).sql) 语句使用Navicat进行运行即可
-
+这个SQL会生成三张表,global_table、lock_table、branch_table  
+关于这三张表的介绍详情见6.5 seata原理=>3.seata的三张表  
 
 **修改配置文件**
 回到宿主机的挂载目录下,进入resource目录下,备份file.conf配置文件,并修改改文件内容如下:  
@@ -2665,6 +2669,36 @@ public void add(Order order) {
 
 *注意这里有很多坑,如果出现读取不到nacos中服务的问题,有可能是group和nacos中配置的不一样,一定要注意观察对应nacos中的配置*
 
+### 6.5 seata原理
+在seata架构中一共有三个角色  
+* 事务协调者(TC):维护全局和分支事务的状态,驱动全局事务提交或回滚
+* 事务管理器(TM):定义全局事务的范围,开始全局事务、提交或回滚全局事务
+* 资源管理器(RM):管理分支事务处理的资源,与TC交谈以注册分支事务和报告分支事务的状态,并驱动分支事务提交或回滚
+
+1.分布式事务流程概述  
+1.1 TM事务管理器请求TC事务协调者开启一个全局事务,TC事务协调者会生成一个XID作为全局事务的编号,XID会在微服务的调用链路中传播,保证<font color="#00FF00">多个微服务的子事务</font>关联在一起
+1.2 RM资源管理器请求TC事务协调者将本地事务注册为全局事务的分支事务,通过全局事务的XID进行关联
+1.3 TM事务管理器请求TC告诉XID对应的全局事务进行提交还是回滚
+1.4 TC事务协调者驱动RM资源管理器们将XID对应的本地事务进行提交还是回滚  
+
+2.流程图  
+![流程图](resources/springcloud/58.png) 
+
+3.seata的三张表  
+之前说过seata数据库一共有三张表分别为:<font color="#00FF00">global_table、lock_table、branch_table</font>  
+
+* global_table:全局事务表,每一个全局事务都会在该表中生成一条记录
+* branch_table:分支事务表,每一个分支事务都会在改表中生成一条记录
+  什么时候生成,当微服务A执行了一条SQL后就会生成一条记录
+* lock_table:锁表,也就是在插入记录后会生成的<font color="#00FF00">行锁</font>信息
+  通过该表可以完成事务与事务之间的隔离,有点像MVCC
+
+4.undo_log  
+在每个数据库还存在一张undo_log表;详情见6.4 seata实现分布式事务=>2.为每个微服务的数据库添加undo_log表  
+实际上<font color="#00FF00">before_image和after_image</font>信息就存放在这张表的<font color="#00FF00">rollback_info</font>字段下  
+执行如下SQL来观察这些信息  
+![image](resources/springcloud/59.png)  
+<font color="#00FF00">通过此元数据就可以逆向生成SQL来执行回滚操作</font>  
 
 
 ## 7.网关
@@ -2672,9 +2706,619 @@ public void add(Order order) {
 *注意:这里顺序乱了,这里还需要把P60看一下*
 
 **目录:**  
-7.1 
+7.1 网关基本介绍  
+7.2 gateway基本环境搭建  
+7.3 gateway整合nacos  
+7.4 gateway路由断言工厂  
+7.5 gateway过滤器工厂  
+7.6 gateway整合sentinel  
+7.7 nginx整合gateway  
 
 
+### 7.1 网关基本介绍
+**痛点:**  
+* 每个业务都会需要鉴权、限流、权限校验、跨域等逻辑;可以使用网关将这部分内容抽离出来放到统一的地方完成(也就是网关的功能)
+* 网关提供了流量的统一入口
+
+所以网关提供了哪些功能?可以参考<font color="#00FF00">kong</font>笔记  
+
+1.gateway基本介绍  
+Spring Cloud Gateway是由<font color="#00FF00">WebFlux + Netty + Reactor</font>实现的响应式的API网关,它不能再传统的servlet容器中使用,也不能构成成war包
+
+2.gateway特点  
+* 动态路由,能够匹配任意请求属性
+* 支持路径重写
+* 集成SpringCloud的服务发现功能(nacos、eruka)
+* 可集成流控降级功能(sentinel、hystrix)
+* 可以对路由指定易于编写的Predicate(断言)和Filter(过滤器)
+
+3.核心概念
+* 路由:路由是网关中最基础的部分,路由信息包括一个ID、一个目的URI、一组断言工厂、一组filter组成;如果断言为真,则说明请求的URL和配置的路由匹配
+* 断言:Java8中的断言函数,断言函数类型是Spring5框架中的ServerWebExchange,断言函数允许开发者去定义匹配Http request中的任何信息,比如<font color="#00FF00">请求头、参数、cookie</font>等
+* 过滤器:SpringCloudGateway分为<font color="#00FF00">Gateway Filter和Global Filter</font>,Filter可以对请求和响应进行处理
+
+4.Spring Cloud Gateway工作原理  
+![工作原理](resources/springcloud/60.png)  
+客户端向Spring Cloud Gateway发出请求.如果映射器(Gateway Handler Mapping)确定请求与路由匹配(断言匹配),则将其发送到网关Web处理程序(Gateway Web Handler).Web处理程序通过特定的过滤链来处理该请求,过滤器被虚线分割的原因是过滤器可以在发送代理请求之前和之后运行逻辑.所有pre过滤器先执行,然后执行代理过滤器(proxy filter),代理过滤器请求完成后,执行post过滤器  
+
+个人总结:<font color="#00FF00">一个请求过来时会扫描所有<font color="#FF00FF">断言工厂</font>,断言匹配的会转发到对应的<font color="#FF00FF">路由</font>,在路由之前会经过一系列的<font color="#FF00FF">过滤器</font></font>  
+
+### 7.2 gateway基本环境搭建
+1.创建gateway模块  
+
+2.修改pom文件  
+```xml
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-gateway</artifactId>
+</dependency>
+```
+
+3.创建主启动类  
+```java
+@SpringBootApplication
+public class GatewayApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(GatewayApplication.class, args);
+    }
+}
+```
+
+4.编写yml配置文件 
+```yml
+server:
+  port: 8088
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      # 路由规则
+      routes:
+        - id: order-openfeign #路由的唯一标识,一般写成微服务名称
+          uri: http://localhost:8081 # 需要转发的地址
+          # 断言规则,用于路由规则的匹配
+          predicates:
+            - Path=/order-openfeign/** # 访问http://localhost:8088/order-openfeign/api/hello/ping
+          # 过滤规则
+          filters:
+            - StripPrefix=1 # 会转发到 http://localhost:8081/api/hello/ping 接口(通过这里的过滤器实现,转发之前去掉第一层路径)
+        # - id: service-stock 可以配置多个
+```
+
+5.编写order-openfeign模块  
+因为这里转发到了order-openfeign模块模块,所以这里需要编写/api/hello/ping这个接口,内容如下  
+```java
+@RestController
+@RequestMapping("/api/hello")
+public class HelloController {
+
+    @GetMapping("ping")
+    public String ping() {
+        return "pong";
+    }
+}
+```
+
+6.启动运行  
+启动gateway和order-openfeign模块,访问地址:[http://localhost:8088/order-openfeign/api/hello/ping](http://localhost:8088/order-openfeign/api/hello/ping)  
+
+### 7.3 gateway整合nacos
+1.问题  
+上面的gateway在路由order-openfeign这个微服务的时候使用的是写死的地址,弊端就是一旦远程微服务的地址改变了就很不好;所以这里要整合nacos,<font color="#00FF00">需要把目标路由的微服务地址动态变换</font>  
+
+2.添加gateway模块的pom依赖  
+```xml
+<!--nacos服务注册与发现-->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+```
+
+3.修改gateway模块的yml  
+将当前gateway注册到nacos中,并且修改转发的目标URI;将http改为lb代表转发时使用<font color="#00FF00">负载均衡</font>;将地址改成<font color="#00FF00">目标服务的服务名</font>即可  
+*提示:这里lb使用的是nacos的<font color="#00FF00">本地</font>负载均衡策略,nacos的负载均衡策略是通过ribbon完成的*
+*提示:将地址改为<font color="#00FF00">目标服务名</font>就可以进行路由,本质上是通过全局过滤器进行实现的*
+```yml
+server:
+  port: 8088
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.230.128:8870
+        username: naocs
+        password: nacos
+    gateway:
+      discovery:
+        locator:
+          enabled: true # 当使用nacos的时候就不需要配置断言、路由了,nacos会自动将服务名作为前缀;不过这种方式并不常用
+```
+
+4.启动测试  
+访问地址:[http://localhost:8088/order-openfeign/api/hello/ping](http://localhost:8088/order-openfeign/api/hello/ping) 
+
+### 7.4 gateway路由断言工厂
+**目录:**  
+7.4.1 内置路由断言工厂  
+7.4.2 自定义路由断言工厂  
+
+
+#### 7.4.1 内置路由断言工厂
+**解释:**  
+路由断言工厂就是断言,当请求gateway的时候会使用断言对当前的请求进行匹配,如果匹配成功就路由转发,如果匹配失败就404  
+内置断言工厂就是gateway内置的一批断言规则  
+所有的断言工厂可以参照官网:[https://docs.spring.io/spring-cloud-gateway/reference/spring-cloud-gateway/request-predicates-factories.html](https://docs.spring.io/spring-cloud-gateway/reference/spring-cloud-gateway/request-predicates-factories.html)  
+
+**规则大全:**  
+注意这里面的很多规则都是支持正则匹配的,而不但但是字符串的匹配  
+* `- Path=/red/{segment},/blue/{segment}` 路径匹配,多个路径使用逗号,隔开
+* `- After=2017-01-20T17:42:47.789-07:00[America/Denver]` 当前请求的时间必须在该时间之后
+* `- Before=2017-01-20T17:42:47.789-07:00[America/Denver]` 当前请求的时间必须在该时间之前
+* `- Between=2017-01-20T17:42:47.789-07:00[America/Denver], 2017-01-21T17:42:47.789-07:00[America/Denver]` 当前请求的时间必须在该之间段内
+* `- Cookie=chocolate, regular` 必须携带name为chocolate的cookie,并且cookie的value必须与regular正则表达式匹配
+* `- Header=X-Request-Id, \d+` 必须携带key为X-Request-Id的请求头,并且请求头的value必须与后面的正则表达式匹配(这里是\d+正则表达式)
+* `- Host=**.somehost.org,**.anotherhost.org` 请求头的Host的value值必须为**.somehost.org或者**.anotherhost.org
+* `- Method=GET,POST` 请求的方法类型必须为GET或POST
+* `- Query=color,red.` 请求时必须携带请求参数color,如果不需要限定值是什么就不写逗号后面的内容,如果需要限制值是什么也是支持正则表达式的(例如这里的值可以是red.)
+* `- RemoteAddr=192.168.1.1/24` 请求地址
+* 权重工厂
+  ```yml
+  spring:
+  cloud:
+    gateway:
+      routes:
+      - id: weight_high
+        uri: https://weighthigh.org
+        predicates:
+        - Weight=group1, 8
+      - id: weight_low
+        uri: https://weightlow.org
+        predicates:
+        - Weight=group1, 2
+  ```
+  在这种配置规则下会把80%的流量转发给https://weighthigh.org ,而把20%的流量转发给https://weightlow.org  
+  <font color="#00FF00">通过权重工厂就可以实现灰度发布,蓝绿发布</font>
+* `- XForwardedRemoteAddr=192.168.1.1/24` 请求头必须携带该请求参数
+
+1.演示  
+```yml
+server:
+  port: 8088
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.230.128:8870
+        username: naocs
+        password: nacos
+
+    gateway:
+      # 路由规则
+      routes:
+        - id: order-openfeign #路由的唯一标识,一般写成微服务名称
+          uri: lb://order-openfeign # 需要转发的服务名
+          # 断言规则,用于路由规则的匹配
+          predicates:
+            # 因为没有过滤器参数,此时请求/api/hello前缀时就会匹配order-openfeign服务
+            - Path=/api/hello/**
+            - Query=color,green
+```
+
+访问接口:[http://localhost:8088/api/hello/ping?color=green](http://localhost:8088/api/hello/ping?color=green) 发现成功,如果把请求参数改一下就会404  
+
+
+#### 7.4.2 自定义路由断言工厂
+通过参照内置的断言工厂来实现自定义的断言工厂  
+断言工厂需要满足以下几个条件:  
+* 必须添加到Spring容器中
+* 命名格式必须是<font color="#FF00FF">xxxRoutePredicateFactory</font>,因为底层是通过反射来获取类名之后可以在配置文件中编写
+  例如QueryRoutePredicateFactory反射会读取到Query,那么在gateway的配置项predicates中就可以使用-Query来指定内容了
+* 必须继承自AbstractRoutePredicateFactory
+* 必须在当前类中编写一个静态的内部类Config,该内部类就是用于接收在yml中对predicates进行配置的配置信息的
+  必须声明getter/setter方法
+  并且属性名也是有讲究的,在yml中指定参数时,一个逗号就代表一个参数;假设QueryRoutePredicateFactory有两个条件(分别是key-color和value-green),那么内部类就必须有key和value这两个参数来映射它们对应的值,所以在实现shortcutFieldOrder方法的时候就要对应顺序  
+  shortcutFieldOrder方法返回一个字符串List,List中存放的内容必须要指定为Config类中参数的名称,并且在赋值时候会按照List中指定的参数顺序进行赋值(看不懂就看下面的例子吧)
+  例如List返回值为["key","value"]则代表将-Query=color,green的color赋值给Config类中的key属性,将greent赋值给Config类中的value属性
+  - - -
+  比如在QueryRoutePredicateFactory类中就有一个Config类,它就是用于接收例如上面的color和green这两个参数的
+
+1.实现自已的断言工厂  
+**需求:**  
+实现一个CheckAuth的断言工厂,只要yml的predicates配置的内容为admin则断言成功,这个需求和前端没有什么交互  
+```java
+@Component
+public class CheckAuthRoutePredicateFactory extends AbstractRoutePredicateFactory<CheckAuthRoutePredicateFactory.Config> {
+
+    public static final String NAME = "name";
+
+    public CheckAuthRoutePredicateFactory(Class<Config> configClass) {
+        super(configClass);
+    }
+
+    @Override
+    public Predicate<ServerWebExchange> apply(CheckAuthRoutePredicateFactory.Config config) {
+        return new GatewayPredicate() {
+            @Override
+            public boolean test(ServerWebExchange exchange) {
+                // 如果指定的值为admin就返回true,否则返回false
+                return config.getName().equals("admin");
+            }
+
+        };
+    }
+
+    @Override
+    public List<String> shortcutFieldOrder() {
+        return Arrays.asList(NAME);
+    }
+
+    /**
+     * 用于接收yml配置文件中的断言信息的
+     */
+    @Validated
+    public static class Config {
+
+        private String name;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+    }   
+}
+```
+
+2.修改yml配置文件  
+```yml
+server:
+  port: 8088
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.230.128:8870
+        username: naocs
+        password: nacos
+
+    gateway:
+      routes:
+        - id: order-openfeign 
+          uri: lb://order-openfeign
+          predicates:
+            - Path=/api/hello/**
+            - Query=color,green
+            - CheckAuth=admin
+```
+
+3.测试运行  
+当yml配置文件中CheckAuth的值指定为admin时则可以访问,否则显示404  
+访问接口:[http://localhost:8088/api/hello/ping](http://localhost:8088/api/hello/ping)
+
+### 7.5 gateway过滤器工厂
+*提示:过滤器工厂和路由断言工厂非常相似*  
+**目录:**  
+7.5.1 内置过滤器  
+7.5.2 自定义过滤器  
+7.5.3 全局过滤器  
+
+#### 7.5.1 内置过滤器
+**解释:**  
+过滤器允许修改传入的HTTP请求或响应  
+内置过滤器就是gateway内置的一批过滤器  
+所有的过滤器可以参照官网:[https://docs.spring.io/spring-cloud-gateway/reference/spring-cloud-gateway/gatewayfilter-factories.html](https://docs.spring.io/spring-cloud-gateway/reference/spring-cloud-gateway/gatewayfilter-factories.html)  
+官网这里一共有31个过滤器  
+
+**规则大全:**  
+* `-AddRequestHeader=X-Request-Red, Blue-{segment}` 添加请求头
+* `-PrefixPath=/mypath` 转发的时候添加请求前缀
+* `- RedirectTo=302, https://baidu.com/` 重定向到百度
+
+#### 7.5.2 自定义过滤器
+* 必须添加到Spring容器中
+* 命名格式必须是<font color="#FF00FF">xxxGatewayFilterFactory</font>
+* 必须继承自AbstractNameValueGatewayFilterFactory
+* 如果有Config的需求可以添加Config内部类,<font color="#00FF00">Config类不是必须的</font>  
+  Config类的使用效果和之前路由断言工厂一模一样
+
+
+1.创建自定义过滤器  
+**需求:**  
+在请求的时候如果有请求参数name=admin就能访问,否则不允许访问  
+*提示:这里的需求用断言也可以实现,这里就是演示一下自定义过滤器*
+```java
+@Component
+public class CheckAuthGatewayFilterFactory extends AbstractGatewayFilterFactory<CheckAuthGatewayFilterFactory.Config> {
+
+    public static final String VALUE = "value";
+
+    public CheckAuthGatewayFilterFactory() {
+        super(CheckAuthGatewayFilterFactory.Config.class);
+    }
+
+    @Override
+    public List<String> shortcutFieldOrder() {
+        return Arrays.asList(VALUE);
+    }
+
+    @Override
+    public GatewayFilter apply(CheckAuthGatewayFilterFactory.Config config) {
+        return new GatewayFilter() {
+            @Override
+            public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+                // 获取请求参数,如果不等于value值就失败,否则就正常访问
+                String name = exchange.getRequest().getQueryParams().getFirst("name");
+                if (config.getValue().equals(name)) {
+                    return chain.filter(exchange);
+                }else {
+                    // 如果错误就设置状态码为404
+                    exchange.getResponse().setStatusCode(HttpStatus.NOT_FOUND);
+                    exchange.getResponse().setComplete();
+                }
+                return chain.filter(exchange);
+            }
+        };
+    }
+
+
+    public static class Config {
+        private String value;
+
+        public String getValue() {
+            return value;
+        }
+
+        public void setValue(String value) {
+            this.value = value;
+        }
+    }
+}
+```
+
+2.修改yml配置文件  
+```yml
+server:
+  port: 8088
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.230.128:8870
+        username: naocs
+        password: nacos
+
+    gateway:
+      # 路由规则
+      routes:
+        - id: order-openfeign
+          uri: lb://order-openfeign
+          predicates:
+            - Path=/api/hello/**
+          filters:
+            - CheckAuth=admin
+```
+
+3.测试运行  
+当yml配置文件中CheckAuth的值指定为admin时则可以访问,否则显示404  
+访问接口:[http://localhost:8088/api/hello/ping?name=admin](http://localhost:8088/api/hello/ping?name=admin)
+
+
+#### 7.5.3 全局过滤器
+*提示:内置过滤器和自定义过滤器都是针对单个路由生效的,而全局过滤器是针对所有路由都生效*  
+
+1.内置全局过滤器  
+*提示:同理SpringCloudGateway也是内置了一批全局的过滤器*  
+* `LoadBalancerClientFilter`:通过负载均衡客户端根据路由的URL解析转换为真实的请求URL
+* `NettyRoutingFilter`:通过HttpClient客户端转发请求真实的URL并将响应写入到当前请求的响应中
+* `NettyWriteResponseFilter`:同上
+* `WebSocketRoutingFilter`:负责处理WebSocket类型的请求响应信息
+* `ForwardPathFilter`:解析路径,并将路径转发
+* `RouteToRequestUrlFilter`:转换路由中的URL
+* `WebClienHttpRoutingFilter`:通过WebClient客户端发请求真实的URL并将响应信息写入到当前的请求响应中
+* `WebClientWriteResponseFilter`:同上
+
+2.自定义全局过滤器  
+这里编写一个日志过滤器  
+```java
+@Component
+public class LogFilter implements GlobalFilter {
+
+    private final Logger logger = LoggerFactory.getLogger(LogFilter.class);
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        logger.info(exchange.getRequest().getPath().value());
+        return chain.filter(exchange);
+    }
+}
+```
+
+3.跨域请求配置  
+```yml
+spring:
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]': # 允许跨域访问的资源
+            allowedOrigins: "https://docs.spring.io" # 跨域允许的来源,一般配置为公司的域名即已知的来源,例如 jdd.com
+            allowedMethods:
+            - GET
+```
+* `allowedOrigins`:跨域允许的来源,一般配置为公司的域名即已知的来源,例如 jdd.com
+
+还可以针对<font color="#00FF00">路由级别</font>进行跨域请求的配置(摘自官网):  
+```yml
+spring:
+  cloud:
+    gateway:
+      routes:
+      - id: cors_route
+        uri: https://example.org
+        predicates:
+        - Path=/service/**
+        metadata:
+          cors
+            allowedOrigins: '*'
+            allowedMethods:
+              - GET
+              - POST
+            allowedHeaders: '*'
+            maxAge: 30
+```
+
+4.跨域请求代码方式  
+```java
+@Configuration
+public class CorsConfig {
+    @Bean
+    public CorsWebFilter corsWebFilter() {
+        CorsConfiguration corsConfiguration = new CorsConfiguration();
+        corsConfiguration.addAllowedMethod("*");
+        corsConfiguration.addAllowedOrigin("*");
+        corsConfiguration.addAllowedHeader("*");
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**",corsConfiguration);
+        return new CorsWebFilter(source);
+    }
+}
+```
+
+### 7.6 gateway整合sentinel  
+**目录:**  
+7.6.1 gateway整合sentinel基本环境搭建  
+7.6.2 gateway整合sentinel详细配置  
+
+
+
+#### 7.6.1 gateway整合sentinel基本环境搭建
+1.添加gateway模块的依赖  
+```xml
+<!--gateway整合sentinel-->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-alibaba-sentinel-gateway</artifactId>
+</dependency>
+<!--sentinel依赖-->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+</dependency>
+```
+
+2.修改yml配置文件  
+*提示:这里gateway转发的服务还是order-openfeign*  
+```yml
+server:
+  port: 8088
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 192.168.230.128:8870
+        username: naocs
+        password: nacos
+
+    gateway:
+      # 路由规则
+      routes:
+        - id: order-openfeign
+          uri: lb://order-openfeign
+          predicates:
+            - Path=/api/hello/**
+
+    # 配置sentinel-控制台
+    sentinel:
+      transport:
+        dashboard: 192.168.230.128:8858
+```
+
+3.修改主启动类  
+```java
+@SpringBootApplication
+public class GatewayApplication {
+    public static void main(String[] args) {
+        // 添加上这一行,否则有时可能sentinel不能识别gateway;因为sentinel为gateway提供了特殊的API
+        System.setProperty("csp.sentinel.app.type", "1");
+        SpringApplication.run(GatewayApplication.class, args);
+    }
+}
+```
+
+4.启动访问接口,查看sentinel  
+![路由](resources/springcloud/61.png)  
+可以看到左侧的菜单栏也发生了变化,这是因为sentinel为gateway单独提供了不一样的设置
+
+#### 7.6.2 gateway整合sentinel详细配置
+1.打开流控面板  
+![打开流控面板](resources/springcloud/62.png)  
+点击左侧的API管理->流控 会打开不一样的gateway专享流控面板  
+![流控面板](resources/springcloud/63.png)  
+
+* QPS:按照QPS进行限流
+* QPS阈值:在规定的时间<font color="#00FF00">间隔</font>内达到阈值后会限流
+* 间隔:同上
+* 流控方式:快速失败和匀速排队(这两个效果和之前一样)
+* Burst Size:宽容次数,假设这里该值设置为1;则1s请求3次以上才会进行限流
+
+2.勾选请求属性  
+![请求属性](resources/springcloud/64.png)  
+<font color="#00FF00">请求属性:就类似之前gateway的断言,当有流量进来时要进行断言匹配,<font color="#FF00FF">匹配成功的才会触发流控</font></font>
+
+* Client IP:限制请求IP
+* Remote Host:远程主机
+* Header:请求头
+* URL参数:请求参数
+* Cookie:Cookie
+
+假设这里设置Client IP为127.0.0.1,<font color="#00FF00">那么只有当虚拟机访问该接口时才会触发流控</font>,如果使用外面的Windows宿主机则不会触发流控(因为IP不是127.0.0.1)  
+
+3.API管理  
+*提示:上述方式是对路由进行流控,粒度是比较细的,如果需要对一组API进行管理就可以使用左侧*
+![API管理](resources/springcloud/65.png)  
+可以看到这种管理方式是比较灵活的,它支持三种匹配模式:精确、前缀、正则;并且支持多个匹配模式,通过这种方式来一次性管理多个API  
+点击新增后就可以看到API分组了,接着来到流控规则就可以对刚才的API分组进行流控了  
+
+4.自定义降级方法  
+*提示:同理现在的降级方法都是sentinel默认的,现在需要自定义降级方法*
+详情见:5.4.1 流控规则=>5.统一降级信息返回结果  
+```java
+@Configuration
+public class GatewayConfig {
+    @PostConstruct
+    public void init(){
+        BlockRequestHandler blockRequestHandler = new BlockRequestHandler() {
+            @Override
+            public Mono<ServerResponse> handleRequest(ServerWebExchange exchange, Throwable t) {
+                // 自定义异常处理
+                return ServerResponse.status(HttpStatus.OK)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(BodyInserters.fromValue("降级了!"));
+            }
+        };
+        WebFluxCallbackManager.setBlockHandler(blockRequestHandler);
+    }
+}
+```
+
+### 7.7 nginx整合gateway
+**解释:** 
+为了保障网关的高可用还必须对网关进行集群,所以在最外层还需要使用NGINX做反向代理  
+详情见:附录=>1.微服务基本概念介绍=>1.1 微服务基本概念介绍=>5.微服务架构
 
 
 
