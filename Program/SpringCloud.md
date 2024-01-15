@@ -6,6 +6,8 @@
 5.服务降级  
 6.分布式事务  
 7.网关  
+8.链路追踪  
+9.服务网格  
 
 
 **附录:**  
@@ -3319,6 +3321,136 @@ public class GatewayConfig {
 **解释:** 
 为了保障网关的高可用还必须对网关进行集群,所以在最外层还需要使用NGINX做反向代理  
 详情见:附录=>1.微服务基本概念介绍=>1.1 微服务基本概念介绍=>5.微服务架构
+
+## 8.链路追踪
+**目录:**  
+8.1 skywalking基本环境搭建  
+8.2 skywalking接入微服务  
+
+
+### 8.1 skywalking基本环境搭建
+1.skywalking介绍  
+skywalking是一个国产的开源框架,是分布式系统应用程序的<font color="#00FF00">性能监视工具</font>,转为微服务、云原生架构和基于容器架构(Docker、K8S、mesos;mesos是大数据相关的)而设计,包括了<font color="#00FF00">分布式追踪、性能指标分析、应用和服务依赖分析</font>等功能  
+[Github](https://github.com/apache/skywalking)  
+[skywalking官网](https://skywalking.apache.org/)  
+[Docker](https://hub.docker.com/r/apache/skywalking-oap-server)  
+[中文文档(社区版)](https://skyapm.github.io/document-cn-translation-of-skywalking/)  
+[agent历史版本下载](https://archive.apache.org/dist/skywalking/)  
+
+2.skywalking特点  
+* 埋点方式:无侵入,字节码增强
+* 支持语言:Java/.net/NodeJs/php/go
+* 支持APM(Application Performance Managment)
+* 支持webflux
+* 存储机制:H2、ES、MySQL
+* 高性能,相较于Zipkin和PinPoint这类链路追踪框架,skywalking的性能是最好的  
+  PinPoint是棒子开发的,很垃圾
+* 通过Java探针(Agent)方式进行增强
+
+3.skywalking部署概念介绍  
+![运行原理图](resources/springcloud/66.png)  
+* skywalking agent负责与业务系统绑定在一起,负责手机各种监控数据
+* skywalking oapservice是负责处理数据监控的,比如接收skywalking agent的监控数据并存储在数据库中;接受并处理skywalking webapp的前端请求;skywalking opaservice通常以<font color="#00FF00">集群</font>的方式存在
+* skywalking webapp前端界面用于展示数据
+* 用于存储监控数据的数据库,MySQL/ES
+
+4.部署skywalking opaservice  
+4.1 启动docker容器  
+```shell
+docker run \
+--name skywalking-oap \
+-d apache/skywalking-oap-server:8.5.0-es7
+```
+
+4.2 创建目录  
+`mkdir -p ~/software/skywalking/config`
+
+4.3 拷贝配置文件  
+`docker cp [containerId]:/skywalking/config ~/software/skywalking/`  
+
+4.4 删除容器  
+```shell
+docker stop [containerId]
+docker rm [containerId]
+```
+
+4.5 重启容器  
+```shell
+docker run \
+-p 1234:1234 \
+-p 11800:11800 \
+-p 12800:12800 \
+--name skywalking-oap \
+-v ~/software/skywalking/config:/skywalking/config \
+-d apache/skywalking-oap-server:8.5.0-es7
+```
+**解释:**
+* `-p 11800:11800` 用于接收agent微服务数据的
+* `-p 12800:12800` 用于接收web前端的访问请求
+
+
+5.部署
+5.1 启动容器  
+```shell
+docker run --name oap-ui \
+-p 8090:8080 \
+-e SW_OAP_ADDRESS=http://192.168.149.131:12800 \
+-d apache/skywalking-ui:8.5.0
+```
+
+**解释:**  
+* `-e SW_OAP_ADDRESS=http://192.168.149.131:12800` oap服务的地址
+
+6.启动测试  
+![启动测试](resources/springcloud/67.png)  
+
+### 8.2 skywalking接入微服务
+**目录:**  
+8.2.1 skywalking接入单个微服务  
+8.2.2 skywalking接入多个微服务  
+
+#### 8.2.1 skywalking接入单个微服务
+1.下载agent包  
+打开8.1节介绍的agent下载地址,下载对应版本的apm包,注意在高版本agent单独拆分下来了不需要再下载apm包了,而是直接去官网上下载  
+![下载agent包](resources/springcloud/68.png)  
+找到agent路径下的agent包即可  
+![agent](resources/springcloud/69.png)  
+
+2.添加启动参数  
+之前说过skywalking是以探针的方式无侵入来进行管控的,所以在启动的时候需要指定agent参数来让它引用skywalking-agent.jar  
+这里以order-openfeign模块为例进行演示,编辑gateway启动配置添加如下内容  
+```shell
+# 填入agent地址
+-javaagent:/path/to/skywalking-agent.jar
+# 在skywalking上显示的名称
+-DSW_AGENT_NAME=api-service
+# 填入agent服务oap地址
+-DSW_AGENT_COLLECTOR_BACKEND_SERVICES=192.168.149.131:11800
+```
+
+这里有大坑,无法直接监控gateway服务,需要安装插件;但是又没有找到如何在docker环境下安装插件的方法  
+
+3.启动运行  
+成功显示监控画面  
+![监控画面](resources/springcloud/70.png)  
+
+
+#### 8.2.2 skywalking接入多个微服务
+
+
+
+
+
+
+
+
+
+## 9.服务网格  
+https://www.zhihu.com/question/398181565/answer/2850564275
+
+
+
+
 
 
 
