@@ -3326,6 +3326,11 @@ public class GatewayConfig {
 **目录:**  
 8.1 skywalking基本环境搭建  
 8.2 skywalking接入微服务  
+8.3 使用MySQL持久化skywalking  
+8.4 自定义链路追踪  
+8.5 日志  
+8.6 告警  
+8.7 skywalking更多功能  
 
 
 ### 8.1 skywalking基本环境搭建
@@ -3436,9 +3441,265 @@ docker run --name oap-ui \
 
 
 #### 8.2.2 skywalking接入多个微服务
+1.skywalking接入多个微服务实际上就是在每个微服务添加agent  
+
+
+### 8.3 使用MySQL持久化skywalking
+skywalking默认是把数据放在内存中的,一旦服务重启后数据就会丢失,并且随着运行时间的变长内存就也会爆满  
+
+1.备份配置文件
+进入~/software/skywalking/config文件夹,备份application.yml配置文件  
+
+
+2.修改application.yml配置文件  
+进入~/software/skywalking/config文件夹,修改application.yml配置文件  
+```yml
+storage:
+  selector: ${SW_STORAGE:mysql}
+    mysql:
+    properties:
+      jdbcUrl: ${SW_JDBC_URL:"jdbc:mysql://192.168.230.128:7901/swtest"}
+      dataSource.user: ${SW_DATA_SOURCE_USER:root}
+      dataSource.password: ${SW_DATA_SOURCE_PASSWORD:sukidayo}
+```
+
+3.新建数据库  
+来到Navicat新建上面的数据库swtest  
+
+4.将mysql-connector-java-8.0.25.jar驱动复制到容器的ext-libs目录下  
+**解释:**  
+这里如果直接重启会报错没有驱动,所以这里先把启动复制到虚拟机中,如果没有驱动就从本地的Maven仓库中找一个驱动(反之是通用的);然后拷贝到虚拟机中,再将宿主机上的驱动复制到容器中的ext-libs目录下即可  
+
+5.重启容器  
+一段时间过后查看数据库,相关的表已经建立  
+![建立](resources/springcloud/71.png)  
+
+
+### 8.4 自定义链路追踪
+1.问题  
+![链路](resources/springcloud/72.png)  
+在这张图的链路追踪中,可以看到从网关层面到服务层面到远程调用甚至是MySQL的所有链路信息都有,<font color="#00FF00">但是这张图目前还没有service层的代码</font>,如果需要在链路中加上service层的信息就需要自定义链路最终  
+
+2.修改order-openfeign模块的依赖  
+依旧在order-openfeign模块模块下进行实验,添加pom文件的依赖如下  
+```xml
+<!--sky walking工具类;注意版本号和skyWalking对应上-->
+<dependency>
+    <groupId>org.apache.skywalking</groupId>
+    <artifactId>apm-toolkit-trace</artifactId>
+    <version>8.5.0</version>
+</dependency>
+```
+
+3.编写Service层代码  
+```java
+public interface HelloService {
+    String ping(String name);
+}
+```
+
+<font color="#00FF00">只需要在service层的代码中添加@Trace标签接口</font>
+```java
+@Service
+public class HelloServiceImpl implements HelloService {
+    @Trace
+    @Override
+    public String ping(String name) {
+        return "pong" + name;
+    }
+}
+```
+
+4.编写controller层的代码  
+```java
+@RestController
+@RequestMapping("/api/hello")
+public class HelloController {
+
+    private final HelloService helloService;
+
+    public HelloController(HelloService helloService) {
+        this.helloService = helloService;
+    }
+
+    @GetMapping("ping")
+    public String ping(@RequestParam("name") String name) {
+        return helloService.ping(name);
+    }
+
+}
+```
+
+5.启动测试  
+![启动测试](resources/springcloud/73.png)  
+可以看到service层的代码已经成功添加到链路中了
+
+6.记录请求参数和返回值  
+如果需要记录方法的请求参数和返回值就需要使用@Tags标签  
+```java
+@Service
+public class HelloServiceImpl implements HelloService {
+    @Trace
+    @Tags({
+            @Tag(key = "ping",value = "returnedObj"),
+            @Tag(key = "ping",value = "arg[0]")
+    })
+    @Override
+    public String ping(String name) {
+        return "pong" + name;
+    }
+}
+
+```
+
+**解释:**  
+@Tag注解的key一般是方法名,当value是returnedObj时表明记录该方法的返回值  
+当value是arg[index]表明记录该方法的第几个参数  
+<font color="#00FF00">注意@Tags标签要和@Trace标签一起使用</font>  
+
+7.启动测试  
+![启动测试](resources/springcloud/74.png)  
+此时点击图中红色方框中的内容,就会在左侧绿色方框区域弹出一个面板显示当前方法的入参和返回值  
+
+### 8.5 日志
+1.需求  
+希望微服务的日志能够记录当前<font color="#00FF00">追踪链路的ID</font>,通过追踪链路的ID就可以从skywalking中找到对应的追踪记录  
+
+2.添加logback-spring.xml配置  
+如果需要使用其它的日志框架就陪配置该框架对应的日志文件  
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!--导入springboot日志框架的默认配置-->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
+            <layout class="org.apache.skywalking.apm.toolkit.log.logback.v1.x.TraceIdPatternLogbackLayout">
+                <!--添加[%tid]代表traceID(追踪链路的ID)-->
+                <Pattern>${CONSOLE_LOG_PATTERN:-%clr(%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd HH:mm:ss.SSS}}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} [%tid] %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}}</Pattern>
+            </layout>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="console"/>
+    </root>
+
+</configuration>
+```
+
+3.添加pom依赖  
+```xml
+<!--添加日志对应的类-->
+<dependency>
+    <groupId>org.apache.skywalking</groupId>
+    <artifactId>apm-toolkit-logback-1.x</artifactId>
+    <version>8.5.0</version>
+</dependency>
+```
+
+4.启动测试  
+```shell
+-2024-01-15 22:19:33.454  INFO 10580 [TID:85d92c01b82f4b898583733769ceda02.77.17053283734450001] --- [nio-8081-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+-2024-01-15 22:19:33.454  INFO 10580 [TID:85d92c01b82f4b898583733769ceda02.77.17053283734450001] --- [nio-8081-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+-2024-01-15 22:19:33.459  INFO 10580 [TID:85d92c01b82f4b898583733769ceda02.77.17053283734450001] --- [nio-8081-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 5 ms
+```
+此时便能从控制台看到请求的日志ID了  
+
+5.搜索  
+![搜索](resources/springcloud/78.png)  
+把上述完整的ID复制到追踪ID中进行查询  
+
+6.skywalking日志采集  
+![skywalking日志](resources/springcloud/79.png)  
+现在skywalking日志面板中的日志还是空白,所以这里需要修改日志的配置文件,<font color="#00FF00">来将日志推送到skywalking的日志监控面板中</font>  
+<font color="#FF00FF">通过这种方式就可以实现分布式系统的日志采集</font>,就不需要每次都到控制台中查看日志了  
+
+6.1 修改logback-spring.xml配置  
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!--导入springboot日志框架的默认配置-->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
+            <layout class="org.apache.skywalking.apm.toolkit.log.logback.v1.x.TraceIdPatternLogbackLayout">
+                <!--添加[%tid]代表traceID(追踪链路的ID)-->
+                <Pattern>-%clr(%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd HH:mm:ss.SSS}}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} [%tid] %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}</Pattern>
+            </layout>
+        </encoder>
+    </appender>
+
+    <appender name="grpc-log" class="org.apache.skywalking.apm.toolkit.log.logback.v1.x.log.GRPCLogClientAppender">
+        <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
+            <layout class="org.apache.skywalking.apm.toolkit.log.logback.v1.x.mdc.TraceIdMDCPatternLogbackLayout">
+                <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{tid}] [%thread] %-5level %logger{36} -%msg%n</Pattern>
+            </layout>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="console"/>
+        <appender-ref ref="grpc-log"/>
+    </root>
+
+</configuration>
+```
+
+6.2 启动测试  
+![启动测试](resources/springcloud/80.png)  
+理论上这里就会显示如图所示的日志界面了,不过这里我没跑起来;没跑起来是因为docker的原因导致的  
+还需要配置以下内容(具体怎么配置还不知道)  
+```properties
+plugin.toolkit.log.grpc.reporter.server_host=${SW_GRPC_LOG_SERVER_HOST:127.0.0.1}
+plugin.toolkit.log.grpc.reporter.server_port=${SW_GRPC_LOG_SERVER_PORT:11800}
+plugin.toolkit.log.grpc.reporter.max_message_size=${SW_GRPC_LOG_MAX_MESSAGE_SIZE:10485760}
+plugin.toolkit.log.grpc.reporter.upstream_timeout=${SW_GRPC_LOG_GRPC_UPSTREAM_TIMEOUT:30}
+```
+
+### 8.6 告警
 
 
 
+
+
+### 8.7 skywalking更多功能
+**目录:**  
+8.7.1 性能剖析  
+8.7.2 日志  
+
+#### 8.7.1 性能剖析
+点击顶部的路由<font color="#00FF00">性能剖析</font>  
+![性能剖析](resources/springcloud/75.png)  
+
+1.作用  
+通过性能剖析就能检测当前程序中的那一段代码性能比较慢  
+
+2.操作流程  
+*提示:这里还是对order-openfeign的ping方法进行性能监控*  
+2.1 新建任务  
+点击右侧的新建任务  
+![新建任务](resources/springcloud/76.png)  
+
+2.2 参数解释  
+* 服务:选择当前要监控的服务
+* 端点名称:输入当前要监控的那个端点(controller)  
+* 监控时间:可以指定什么时候开始监控
+* 监控持续时间:监控持续多次时间
+* 起始监控时间:第一次开始的间隔
+* 监控间隔:每次监控间隔多长时间
+* 最大采样数:必须请求数量达到这个数量后才会分析  
+
+3.启动测试  
+![启动测试](resources/springcloud/77.png)  
+此时便能看到相应的时间占用情况  
+<font color="#00FF00">甚至它还能看方法调用的堆栈信息</font>  
+
+#### 8.7.2 日志
+![日志](resources/springcloud/79.png)  
+详情见8.5 日志=>6.skywalking日志  
 
 
 
