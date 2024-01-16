@@ -3659,9 +3659,157 @@ plugin.toolkit.log.grpc.reporter.max_message_size=${SW_GRPC_LOG_MAX_MESSAGE_SIZE
 plugin.toolkit.log.grpc.reporter.upstream_timeout=${SW_GRPC_LOG_GRPC_UPSTREAM_TIMEOUT:30}
 ```
 
-### 8.6 告警
+### 8.6 告警  
+**目录:**  
+8.6.1 告警信息  
+8.6.2 WebHook  
 
 
+
+#### 8.6.1 告警信息
+1.告警规则  
+skywalking的默认告警规则在<font color="#00FF00">config/alarm-settings.yml</font>文件中配置  
+* 过去3分钟内服务平均响应时间超过1秒
+* 过去2分钟服务成功率低于80%
+* 过去3分钟内服务响应时间超过1s的百分比
+* 服务实例在过去2分钟内平均响应时间超过1s,并且实例名称与正则表达式匹配
+* 过去2分钟内端点平均响应时间超过1秒
+* 过去2分钟内数据库访问平均响应时间超过1秒
+* 过去2分钟内端点关系平均响应时间超过1秒
+
+2.配置解释  
+一个告警往往由以下条件构成  
+* Rule Name:规则名称,也是告警也是在告警信息中显示的唯一名称.必须以_rule结尾,前缀可自定义
+* Metrics name:度量名称,取值为oal脚本中的度量名,目前只支持1ong、double和int类型.详见Offical OAL Script
+* Include names:该规则作用于哪些实体名称,比如服务名,终端名(可选,默认为全部)
+* Exclude names:该规则作不用于哪些实体名称,比如服务名,终端名(可选,默认为空)
+* Threshold:阈值
+* OP:操作符,目前支持>、<、=
+* Period:多久告警规则需要被核实一下.这是一个时间窗口,与后端部署环境时间相匹配
+* Count:在一个Period窗口中,如果values超过Threshold值(按op),达到Count值,需要发送警报
+* Silence period:在时间N中触发报警后,在TN->TN +period这个阶段不告警.默认情况下,它和Period一样,这意味着相同的告警(在同一个Metrics name拥有相同的ld)在同一个Period内只会触发一次
+* message:告警信息
+
+
+3.修改HelloServiceImpl中的内容  
+```java
+@Service
+public class HelloServiceImpl implements HelloService {
+    @Trace
+    @Tags({
+            @Tag(key = "ping",value = "returnedObj"),
+            @Tag(key = "ping",value = "arg[0]")
+    })
+    @Override
+    public String ping(String name) {
+        try {
+            TimeUnit.SECONDS.sleep(3);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        return "pong" + name;
+    }
+}
+```
+这里为了测试在ping方法里面睡眠了3秒  
+
+4.启动服务多次请求进行测试  
+多次刷新请求便能在告警面板中看到刚才的请求  
+![告警](resources/springcloud/81.png)  
+
+
+#### 8.6.2 WebHook
+1.WebHook概念介绍    
+网络钩子,它的含义是当出现告警信息时可以由skywalking来<font color="#00FF00">主动调用我们服务的接口</font>来发送警告,通过这种方式当出现告警信息时就可以发送邮件给开发人员  
+SkyWalking的告警信息会通过HTTP请求进行发送,<font color="#00FF00">请求方法为POST,context-type为application/json,其JSON数据是基于AlarmMessage进行序列化的</font>  
+
+2.修改alarm-settings.yml  
+在alarm-settings.yml配置文件中添加webhook配置项  
+```yml
+webhooks:
+  - http://192.168.31.204:8081/alarm/receive
+```
+
+3.拷贝AlarmMessage类  
+来到当前skywalking对应版本的github,搜索AlarmMessage类,这个类就是webhook回调时传送的JSON数据,把该类复制到项目中使用即可  
+```java
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+package org.apache.skywalking.oap.server.core.alarm;
+
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * Alarm message represents the details of each alarm.
+ */
+@Setter
+@Getter
+public class AlarmMessage {
+    private int scopeId;
+    private String scope;
+    private String name;
+    private String id0;
+    private String id1;
+    private String ruleName;
+    private String alarmMessage;
+    private long startTime;
+    private transient boolean onlyAsCondition;
+}
+```
+
+**属性解释:**  
+* scopedId:scopedId
+* scope:scope
+* name:目标scope实体名称
+* id1:id1
+* ruleName:告警规则名称
+* alarmMessage:告警消息内容
+* startTime:告警时间
+
+3.还是在order-openfeign模块中编写NotifyController  
+```java
+@RestController
+@RequestMapping("/alarm")
+public class NotifyController {
+
+    @PostMapping("receive")
+    public void receive(@RequestBody List<AlarmMessage> alarmMessage) {
+        StringBuilder sb = new StringBuilder();
+        for (AlarmMessage message : alarmMessage) {
+            sb.append("scopedId").append(message.getScopeId())
+                    .append("\nscope:").append(message.getScope())
+                    .append("\n 目标scope实体名称:").append(message.getName())
+                    .append("\nid1:").append(message.getId1())
+                    .append("\n告警规则名称:").append(message.getRuleName())
+                    .append("\n告警消息内容:").append(message.getAlarmMessage())
+                    .append("\n告警时间:").append(message.getStartTime())
+                    .append("\n\n--------------\n\n");
+        }
+        System.out.println(sb);
+    }
+}
+```
+
+4.重启skywalking容器  
+一段时间后控制台打印如下内容  
+![webhook](resources/springcloud/82.png)  
 
 
 
@@ -3669,6 +3817,7 @@ plugin.toolkit.log.grpc.reporter.upstream_timeout=${SW_GRPC_LOG_GRPC_UPSTREAM_TI
 **目录:**  
 8.7.1 性能剖析  
 8.7.2 日志  
+8.7.3 skywalking集群  
 
 #### 8.7.1 性能剖析
 点击顶部的路由<font color="#00FF00">性能剖析</font>  
@@ -3701,9 +3850,56 @@ plugin.toolkit.log.grpc.reporter.upstream_timeout=${SW_GRPC_LOG_GRPC_UPSTREAM_TI
 ![日志](resources/springcloud/79.png)  
 详情见8.5 日志=>6.skywalking日志  
 
+#### 8.7.3 skywalking集群
+**介绍:**  
+SkyWalking集群是将SkyWalking oap作为一个服务注册到nacos上的,搭建一个skywalking集群至少需要:  
+* nacos集群(至少一个nacos)
+* ES/MySQL集群(至少一个)
+* skywalking集群
+* skywalking UI(也可以是集群,用NGINX代理统一入口)  
 
+1.修改application.yml  
+```yml
+cluster:
+  # 使用nacos注册中心
+  selector: ${SW_CLUSTER:nacos}
+  nacos:
+    # skywalking注册到nacos中的服务名称
+    serviceName: ${SW_SERVICE_NAME:"SkyWalking_OAP_Cluster"}
+    # 地址
+    hostPort: ${SW_CLUSTER_NACOS_HOST_PORT:localhost:8848}
+    # Nacos Configuration namespace 命名空间
+    namespace: ${SW_CLUSTER_NACOS_NAMESPACE:"public"}
+    # Nacos auth username 账号和密码
+    username: ${SW_CLUSTER_NACOS_USERNAME:""}
+    password: ${SW_CLUSTER_NACOS_PASSWORD:""}
+    # Nacos auth accessKey
+    accessKey: ${SW_CLUSTER_NACOS_ACCESSKEY:""}
+    secretKey: ${SW_CLUSTER_NACOS_SECRETKEY:""}
+```
 
+2.修改UI容器中的webapp.yml  
+进入容器,修改/skywalking/webapp/webapp.yml配置文件  
+```yml
+server:
+  port: 8080
 
+collector:
+  path: /graphql
+  ribbon:
+    ReadTimeout: 10000
+    # Point to all backend's restHost:restPort, split by ,
+    # 在这个地方指定skywalking集群的所有地址,用逗号分隔每个集群
+    listOfServers: 127.0.0.1:12800
+```
+
+3.修改微服务探针的启动参数  
+```shell
+-javaagent:E:\Program\Skywalking\apache-skywalking-apm-bin-es7\agent\skywalking-agent.jar
+-DSW_AGENT_NAME=api-service
+# 在这个地方指定skywalking集群的所有地址,用逗号分隔每个集群
+-DSW_AGENT_COLLECTOR_BACKEND_SERVICES=192.168.230.128:11800
+```
 
 
 ## 9.服务网格  
