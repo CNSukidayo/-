@@ -19,6 +19,7 @@
   设置git的全局配置,例如:  
   `git config --global user.name "userName"` 设置提交的用户名  
   `git config --global user.email xxx@qq.com` 设置提交的邮箱  
+  `git config --list` 查看git的所有全局配置  
 
 
   
