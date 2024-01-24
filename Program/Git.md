@@ -19,8 +19,10 @@
   设置git的全局配置,例如:  
   `git config --global user.name "userName"` 设置提交的用户名  
   `git config --global user.email xxx@qq.com` 设置提交的邮箱  
-  `git config --list` 查看git的所有全局配置  
-
+  `git config --global http.proxy http://your_proxy_server:your_proxy_port` 设置Git走代理服务器
+  `git config --global https.proxy https://your_proxy_server:your_proxy_port` 设置Git走代理服务器
+* `git config --list` 查看git的所有全局配置  
+* `git config --global --unset [propertiesKey]` 还原Git的全局配置
 
   
 ### 2.修改当前的更改(包括工作区和暂存区)
@@ -284,4 +286,18 @@ A.Git常用技巧
     > > a.txt  
     > 
     > temp <font color="#00FF00"># 如果这里temp是文件的话它也会被屏蔽</font>  
+30. 设置Git代理教程  
+    首先执行`git config --global http.proxy http://proxyIP:proxyPort`和`git config --global https.proxy https://proxyIP:proxyPort`设置代理服务器的IP和端口  
+    接着执行`vim ~/.ssh/config`编辑ssh的config配置文件添加如下配置  
+    注意ser后面填写上对应的邮箱  
+    ```properties
+    Host github.com
+    ser 2985384723@qq.com
+    ostname ssh.github.com
+    referredAuthentications publickey
+    dentityFile ~/.ssh/id_rsa
+    ort 443
+    ```
+    接着执行`ssh -T git@github.com`并输入yes弹出信息<font color="#00FF00">Hi Clare! You've successfully authenticated, but GitHub does not provide shell access.</font>则代表执行成功  
+    此时理论上推送就都会走代理了  
 
