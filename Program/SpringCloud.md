@@ -1019,7 +1019,8 @@ spring:
 ```
 
 
-*提示:shared-configs和都是数组,在Spring中配置数组中有两种方式一种就是-另一种就是下标方式;此外<font color="#00FF00">shared-configs优先级要高于shared-configs</font>*
+*提示:shared-configs和都是数组,在Spring中配置数组中有两种方式一种就是-另一种就是下标方式;此外<font color="#00FF00">shared-configs优先级要高于extension-configs</font>*  
+除了通过在yml配置文件中指定shared-configs或extension-configs的方式来读取多个配置外,还可以通过第6点使用注解的方式来指定读取的配置  
 
 4.@RefreshScope注解  
 将@Value注解标注在属性上读取到的远程配置是不会自动刷新的,如下  
@@ -1039,6 +1040,15 @@ public class TestController{
     private String name;
 }
 ```
+
+6.@NacosPropertySources  
+该注解一般标注在主启动类上,`@NacosPropertySources`注解内部又由`@NacosPropertySource`注解的数组组成  
+`@NacosPropertySource`注解用于指定当前服务读取配置中心对应命名空间下的<font color="#00FF00">指定Data I和Group的配置</font>  
+* name:给当前的配置起一个名字,这个属性没说法一般指定与groupId一致的内容即可
+* dataId:dataId对应nacos远程配置中心设置的值
+* groupId:groupId对应nacos远程配置中心设置的值
+* autoRefreshed:是否自动刷新配置
+* first:当指定该值时before和after属性将被忽略,是不是优先读取当前的配置
 
 ### 4.6 配置文件的优先级
 todo
