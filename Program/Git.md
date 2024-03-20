@@ -62,7 +62,10 @@
 * `git branch [branchName] [hash]`  
   游离状态下创建新分支,当进入游离状态时会提示一个hash值,我们就根据这个hash值去创建分支.
 * `git branch --set-upstream-to=[remoteBranch]`  
-  将当前的本地分支重新关联为远程[remoteBranch]分支
+  将当前的本地分支重新关联为远程[remoteBranch]分支  
+  注意remoteBranch的形式是upstream/branchName;即源+分支名的形式,例如:  
+  `upstream/dev` 关联主仓库  
+  `origin/dev` 关联fork仓库  
 - - - 
 * `git checkout [-b] [branchName]` 切换到一个分支
   * -b:如果该分支不存在就创建该分支(新分支的版本就是创建新分支的分支的版本)
@@ -148,6 +151,7 @@
 * `git remote rm origin`  
   删除远程分支,该<font color="#00FF00">远程分支</font>是和当前分支对应的分支.删除了之后就相当于本地有这个分支远程没有这个分支的情况,见22条
 * `git remote show` 查看远程分支的根名称(该方法一般返回origin),也就是执行`git remote add origin [remoteAddr]`命令中设置的origin
+* `git remote -v` 查看当前项目关联的远程仓库
 * `git remote show origin`  
   查看当前对应分支是否过期(相较于远程)以及显示远程仓库地址,以及本地分支与远程分支关联的情况
 * `git remote prune origin --dry-run`  
