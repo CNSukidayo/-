@@ -5,7 +5,12 @@
 4.远程协作  
 5.检查历史/状态相关命令  
 
-### 1. 初始化相关命令
+**附录:**  
+A.Git常用技巧  
+B.SourceTree安装教程  
+
+
+## 1.初始化相关命令
 * `git init` 初始化git项目
 - - - 
 * `git clone [remoteAddress]` 克隆远程仓库的代码
@@ -19,13 +24,10 @@
   设置git的全局配置,例如:  
   `git config --global user.name "userName"` 设置提交的用户名  
   `git config --global user.email xxx@qq.com` 设置提交的邮箱  
-  `git config --global http.proxy http://your_proxy_server:your_proxy_port` 设置Git走代理服务器
-  `git config --global https.proxy https://your_proxy_server:your_proxy_port` 设置Git走代理服务器
-* `git config --list` 查看git的所有全局配置  
-* `git config --global --unset [propertiesKey]` 还原Git的全局配置
+
 
   
-### 2.修改当前的更改(包括工作区和暂存区)
+## 2.修改当前的更改(包括工作区和暂存区)
 * `git add [file0] [file1...]` 将某个文件添加到暂存区
 - - -
 * `git mv [originalFile] [targetFile]`  
@@ -42,7 +44,7 @@
   * `--cache`:如果文件已经在工作区进行了修改(**这次修改可以添加到暂存区也可以不添加到暂存区**),使用`--cache`的本质和-f没有什么区别,都会把文件删除的操作一直推到暂存区,只不过`--cache`会取消跟踪该文件;该文件还是会存在于工作区,只不过git不对它进行管理了.<font color="#00FF00">如果此时提交则版本库中确实会把该文件删除,但是工作区还是有的</font>.该命令和`.gitignore`搭配使用效果非常好.  
   * 如果是直接删除文件即在操作系统层面的删除,则这次删除就是工作区的改变;如果想回滚的话会回滚到HEAD指向的版本
 
-### 3. 分支、版本相关命令 
+## 3.分支、版本相关命令 
 * `git commit [-a] [-m ["message"]]` 将缓存区的所有文件提交版本库 
   * -m:添加注释信息 
   * -a:先将工作区的所有文件添加到暂存区,然后再将暂存区的文件提交
@@ -55,17 +57,13 @@
   * -vv:查看本地分支的当前版本、当前commit、和远程分支关联的情况
   * -avv:查看本地分支+远程分支的当前版本、当前commit、和远程分支关联的情况
 * `git branch [branchName]` 创建分支
+* `git branch [newBranchName] [originBranchName/tagName]` 基于分支/标签创建分支,该方法可以基于一个分支或者标签去创建一个分支;所以仅从创建分支角度而言<font color="#00FF00">标签可以视作分支</font>
 * `git branch [-d] [branchName]`  
   删除分支,不能删除当前分支,删除的时候系统建议先将当前要删除的分支合并到master后再删除.
 * `git branch [-D] [branchName]`  强制删除该分支(不建议使用)
 * `git branch -m [oldBranchName] [newBranchName]`	重命名分支(一切分支m)
 * `git branch [branchName] [hash]`  
   游离状态下创建新分支,当进入游离状态时会提示一个hash值,我们就根据这个hash值去创建分支.
-* `git branch --set-upstream-to=[remoteBranch]`  
-  将当前的本地分支重新关联为远程[remoteBranch]分支  
-  注意remoteBranch的形式是upstream/branchName;即源+分支名的形式,例如:  
-  `upstream/dev` 关联主仓库  
-  `origin/dev` 关联fork仓库  
 - - - 
 * `git checkout [-b] [branchName]` 切换到一个分支
   * -b:如果该分支不存在就创建该分支(新分支的版本就是创建新分支的分支的版本)
@@ -114,8 +112,7 @@
 * `git cherry-pick [hash]`  
   将otherBranch分支的<font color="#00FF00">一次提交</font>复制到当前分支(复制的时候不会复制hash值,相当于otherBranch的某次提交的所有操作再执行一次)分支必然都是来自同一节点,所以使用该命令的时候必须从otherBranch和当前节点分开的<font color="#00FF00">第一个commit开始复制</font>(否则会冲突).
 - - - 
-* **<font color="#FFC800">git rebase 也叫变基</font>**
-* `git rebase [branch]` 
+* `git rebase [branch]`  
   将当前分支和branch断开后的所有commit复制到branch.该命令的作用和git cherry-pick类似,只不过当前命令是一次性将两个分支分叉后的<font color="#00FF00">所有commit全部复制一份</font>,另外注意是复制到,所以你要先切换到被复制的那个分支.(复制的时候不会复制hash值),并且该命令只在本机操作不要推送GitHub、branch(想要复制的分支)不能是master(因为master总是要提交到远程)
 * `git reabase --continue`  
   使用git rebase复制的时候同样会产生冲突(有点像merge的冲突,但是这里不能和merge混淆了!!!merge是一次操作而reabase是复制分叉后所有的commit),当解决完冲突后git add -> git reabse --continue
@@ -144,14 +141,13 @@
 
 
 
-### 4. 远程协作
+## 4.远程协作
 * `git remote add origin [remoteAddr]`  
   将本地项目关联到远程(对于新项目而言).注意origin是可变内容(一般不建议修改),由于项目远程地址一般都很长,所以第一次在关联的时候就通过origin代表我们的远程项目地址
   * `remoteAddr`:远程仓库地址
 * `git remote rm origin`  
   删除远程分支,该<font color="#00FF00">远程分支</font>是和当前分支对应的分支.删除了之后就相当于本地有这个分支远程没有这个分支的情况,见22条
 * `git remote show` 查看远程分支的根名称(该方法一般返回origin),也就是执行`git remote add origin [remoteAddr]`命令中设置的origin
-* `git remote -v` 查看当前项目关联的远程仓库
 * `git remote show origin`  
   查看当前对应分支是否过期(相较于远程)以及显示远程仓库地址,以及本地分支与远程分支关联的情况
 * `git remote prune origin --dry-run`  
@@ -182,7 +178,7 @@
 
 
 
-### 5. 检查历史/状态相关命令
+## 5.检查历史/状态相关命令
 * `git status` 查看Git本地仓库的状态
 * `git log` 查看所有commit操作
 * `git reflog` 查看所有操作记录
@@ -204,14 +200,13 @@
 
 
 
-**附录:**  
-A.Git常用技巧  
 
 
 
 
 ## 附录:  
 A.Git常用技巧
+B.SourceTree安装教程  
 
 
 ### A.Git常用技巧
@@ -229,11 +224,14 @@ A.Git常用技巧
    * addrAS:特指通过git remote add origin [addr]命令用一个值指代远程项目地址
    * cache:在git中cache就是指代暂存区
 2. 远程的origin相当于一个单独的分支(远程的分支名称就是origin/本地分支名,<font color="#00FF00">前提是已经关联</font>)通过这个分支感知远程仓库的内容(这个分支在本地也有一份,相当于<font color="#FFC800">本地的远程分支</font>),而本地的master又相当于一个单独的分支.
+  一个项目可以关联多个仓库,比如<font color="#00FF00">关联自已的fork仓库origin,也可以关联原仓库upstream</font>;并且origin和upstream可以是<font color="#FF00FF">异构的远程仓库</font>,比如origin是Gitee的,upstream是github的都可以.  
 3. 每一步操作都会被记录,但是该操作是否生效则不一定
 4. 一般每个开发者都有自已专属的分支  
-  假设远程的公共的开发分支为dev,可以将该远程分支拉到本地;然后基于该分支开辟一个自已的分支,自已平常在该分支上修改,修改的代码commit之后合并到本地的dev分支,然后再将dev推送到远程分支.
-5. 合并分支并不是真正意义上的融合,只是说将otherBranch分支上所有版本库的操作再对被合并的分支执行一次.(首先AB分支版本相同,A分支删除了一些文件,此时将A分支合并到B分支,B分支就会删除这些文件)
-6. 合并分支产生冲突时,记住master分支不应该去处理冲突,而是应该让和master产生冲突的那条分支去处理冲突.冲突分支的那一方首先应该去合并master分支,然后冲突分支再去处理冲突,冲突解决完后再让master分支去合并刚刚冲突的分支.master要做的就是通过git reset命令回到合并之前的版本(原因是当master主动去与冲突分支合并时默认就会让master去处理这个冲突,但是不能让master去处理冲突所以要让master回滚到冲突之前的版本)有冲突是需要协商的.
+  假设远程的公共的开发分支为dev,可以将该远程分支拉到本地;然后基于该分支开辟一个自已的分支,自已平常在该分支上修改,修改的代码commit之后合并到本地的dev分支,然后再将dev推送到远程分支.  
+  这种思想就类似于fork的思想,两种思想差不多  
+5. 合并分支并不是真正意义上的融合,<font color="#00FF00">只是说将otherBranch分支上所有版本库的操作再对被合并的分支执行一次</font>.(首先AB分支版本相同,A分支删除了一些文件,此时将A分支合并到B分支,B分支就会删除这些文件)  
+6. 合并分支产生冲突时,记住<font color="#00FF00">master分支不应该去处理冲突</font>,而是应该让和master产生冲突的那条分支去处理冲突.(<font color="#FF00FF">即中央分支不解决冲突</font>)冲突分支的那一方首先应该<font color="#00FF00">将master分支合并到当前分支</font>,然后冲突分支再去处理冲突,冲突解决完后再让master分支去合并刚刚冲突的分支.master要做的就是<font color="#FF00FF">通过git reset命令回到合并之前的版本</font>(原因是当master主动去与冲突分支合并时默认就会让master去处理这个冲突,但是不能让master去处理冲突所以要让master回滚到冲突之前的版本)
+  这套思想对于fork也是适用的,如果某个仓库发起merge request产生冲突,则当前中央仓库不解决该冲突,而是<font color="#00FF00">让merge request发起方来解决冲突</font>.
 7. 当两个分支的版本相同时并且修改了同一行(合并的时候只会合并版本库),此时合并分支就会产生冲突.如果一个分支的版本领先另一个分支,那么当高版本分支想要合并到低版本分支时就算修改了同一行也不会产生冲突,低版本会直接来到高版本的最新版本.当两个分支产生冲突时,解决完后会进行两次提交,第一次提交相当于克隆目标分支的hash值,第二次提交是解决完冲突后的提交.!!!!!!另外冲突产生的原因还有不规范(比如git cherry-pick [hash]命令跨节点复制)、分支不是同一祖先.
 8. 远端分支的更改本地是感知不到的
 9. pull request和Fork,Fork完项目后我们在Fork的项目的dev分支中修改代码后在主页点击Compare&pull request,然后填入当前修改的提交信息 然后点击create pull request.然后仓库的拥有者就会审查你的代码进行合并操作.
@@ -290,18 +288,22 @@ A.Git常用技巧
     > > a.txt  
     > 
     > temp <font color="#00FF00"># 如果这里temp是文件的话它也会被屏蔽</font>  
-30. 设置Git代理教程  
-    首先执行`git config --global http.proxy http://proxyIP:proxyPort`和`git config --global https.proxy https://proxyIP:proxyPort`设置代理服务器的IP和端口  
-    接着执行`vim ~/.ssh/config`编辑ssh的config配置文件添加如下配置  
-    注意ser后面填写上对应的邮箱  
-    ```properties
-    Host github.com
-    ser 2985384723@qq.com
-    ostname ssh.github.com
-    referredAuthentications publickey
-    dentityFile ~/.ssh/id_rsa
-    ort 443
-    ```
-    接着执行`ssh -T git@github.com`并输入yes弹出信息<font color="#00FF00">Hi Clare! You've successfully authenticated, but GitHub does not provide shell access.</font>则代表执行成功  
-    此时理论上推送就都会走代理了  
+
+
+
+### B.SourceTree安装教程
+1.跳过注册步骤  
+![跳过注册步骤](resources/git/1.png)  
+
+2.自动转换LF  
+![自动转换LF](resources/git/2.png)  
+
+*提示:LF是Linux的换行编码,CRLF是Windows的换行编码*  
+
+3.设置账户信息  
+![账户信息](resources/git/3.png)  
+这里如果已经安装了Git则会自动读取Git配置的全局账户信息  
+
+4.点击下一步即可  
+注意SourceTree默认会安装到系统盘,所以可以通过mklink来链接到D盘  
 
