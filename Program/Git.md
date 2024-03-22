@@ -59,15 +59,20 @@ B.SourceTree安装教程
 * `git branch [branchName]` 创建分支
 * `git branch [newBranchName] [originBranchName/tagName]` 基于分支/标签创建分支,该方法可以基于一个分支或者标签去创建一个分支;所以仅从创建分支角度而言<font color="#00FF00">标签可以视作分支</font>
 * `git branch [-d] [branchName]`  
-  删除分支,不能删除当前分支,删除的时候系统建议先将当前要删除的分支合并到master后再删除.
+  删除分支,不能删除当前分支,并且<font color="#00FF00">当前分支不能删除比自已版本高的分支</font>
 * `git branch [-D] [branchName]`  强制删除该分支(不建议使用)
 * `git branch -m [oldBranchName] [newBranchName]`	重命名分支(一切分支m)
 * `git branch [branchName] [hash]`  
   游离状态下创建新分支,当进入游离状态时会提示一个hash值,我们就根据这个hash值去创建分支.
 - - - 
-* `git checkout [-b] [branchName]` 切换到一个分支
+* `git switch [-c] [branchName]` 切换到`branchName`分支  
+  * `-c`:如果不存在该分支就创建该分支
+- - - 
+* ~~`git checkout [-b] [branchName]`~~ 切换到一个分支  
+  提示:checkout语义不明确,改用`git switch`  
   * -b:如果该分支不存在就创建该分支(新分支的版本就是创建新分支的分支的版本)
-* `git checkout [-b] [branchName] [remoteBranch]`  
+* ~~`git checkout [-b] [branchName] [remoteBranch]`~~  
+  其实这条命令的意思应该是基于某个分支创建一个分支;改用`git branch`
   通过git pull只会拉取所有远程分支并且将这些分支和本地分支合并,但如果一个分支远程有本地没有,首先通过git fetch/git pull拉取所有的远程分支分支到本地origin/分支  
   然后执行git checkout -b -[分支名称] origin/[分支名称] (之前说过远程分支名称就是 origin/分支名称)  
   <font color="#00FF00">在本地创建一个新分支并关联远程分支</font>
@@ -247,7 +252,7 @@ B.SourceTree安装教程
 19. 当通过git checkout origin/master切换到远程分支时会处于一个游离状态.所以既然是处于游离状态,就不是真正意义上的切换分支,而是到达了远程分支的某个版本,即没有切换远程分支的说法,切换到远程分支就是进入游离状态.
 20. 如果项目是克隆下来的,则这个项目是不需要执行`git push -u origin [LocalBranch]`操作的.
 21. 假设A和B同时修改了同一行,A先commit并且push到远程.B再commit并且push到远程,由于修改了同一行必然产生冲突,所以B的这次push压根就不会成功,此时B就需要先pull,pull完了之后因为修改了同一行必然有冲突所以此时B就要去解决这个冲突,解决完后push(会有两次commit)
-22. 本地有的远程没有的分支,用`git push -u origin [branchName]`(或者`git push origin`) 在远程创建分支并和本地关联,远程有的本地没有的查看git checkout -b [branchName] [remoteBranch]\(不能直接使用\)或者看git pull [remoteBranch]:[localBranch]
+22. 本地有的远程没有的分支,用`git push -u origin [branchName]`(或者`git push origin`) 在远程创建分支并和本地关联,远程有的本地没有的可以使用`git branch [newBranchName] [originBranchName/tagName]`命令来基于本地的远程分支创建本地分支或者看git pull [remoteBranch]:[localBranch]
 23. 对于一个有关联的分支,实际上是有3条分支.第一条就是本地的分支,第二条就是远程的分支,第三条是本地的远程分支(用该分支来感应远程分支)
 24. 标签的性质和文件是一样的,如果一个标签本地有远程没有,调用<font color="#00FF00">git pull之后本地有的标签是不会删除的</font>.所以有些时候文件和标签是可以类比的,实际上一个标签在.git目录里就有与之对应的文件.
 25. 当我们通过git submodule关联另外一个项目时,假设另外一个项目的内容发生改变并且push了,但是原项目是感知不到这次提交的,所以我们必须进入到原项目的依赖项目然后通过git pull更新依赖项目,但是这次pull只是将本地的依赖项目更新了,远程的依赖还没有更新,此时在原项目执行 git add->git commit->git push才能让远程更新.
@@ -257,6 +262,7 @@ B.SourceTree安装教程
     SVN是<font color="#00FF00">集中式版本控制系统</font>,需要联网才能工作必须不停地与服务器进行同步.  
     而Git是<font color="#00FF00">分布式版本控制系统</font>,每个人的电脑都是一个<font color="#FFC800">完整</font>的版本库,工作的时候不需要联网,只要把修改的文件推送给对方即可.
 29. <font color="#FFC800">.gitignore</font>指定跟踪规则,主要看/在前面还是在后面  
+    *提示:如果一个文件夹里面没有任何内容则该文件夹默认被屏蔽,而且这个<font color="#00FF00">文件夹无法被添加到暂存区</font>*  
     <font color="#00FF00">temp</font>:取消跟踪当前项目下temp文件及所有temp目录,假设现在项目路径结构如下:  
     > .gitignore  
     > src  
@@ -267,7 +273,7 @@ B.SourceTree安装教程
     > temp  <font color="#00FF00"># 该文件夹会被屏蔽</font>  
     > > a.txt
 
-    <font color="#00FF00">temp/</font>:取消跟踪当前项目下所有的temp文件夹,假设现在项目路径结构如下:  
+    <font color="#00FF00">temp/</font>:取消跟踪与`.gitignore`文件同级及所有子路径下的temp文件夹,假设现在项目路径结构如下:  
     > .gitignore  
     > src  
     > > temp <font color="#00FF00"># 该文件夹会被屏蔽</font>  
@@ -277,7 +283,7 @@ B.SourceTree安装教程
     > temp  <font color="#00FF00"># 该文件夹会被屏蔽</font>  
     > > a.txt
 
-    <font color="#00FF00">/temp</font>:取消跟踪当前项目下的temp文件夹,假设现在项目路径结构如下:  
+    <font color="#00FF00">/temp</font>:取消跟踪与`.gitignore`同级路径下的temp文件/文件夹,假设现在项目路径结构如下:  
     > .gitignore  
     > src  
     > > temp <font color="#FFC800"># 该文件夹不会被屏蔽</font>  
