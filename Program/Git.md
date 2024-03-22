@@ -85,8 +85,13 @@ B.SourceTree安装教程
   进入游离状态(如果要修改则必须提交、游离状态是创建分支的好时机,所以此时HEAD指向的是游离的版本)
 - - -
 * `git merge [Branch]` 将[Branch]分支的内容合并到当前分支.
-* `git merge --no-ff [Branch]`  
-  将[Branch]分支的内容合并到当前分支,并且当前分支进行一次提交操作.(和上面的区别是合并之后两条分支处于同一版本,而现在主动合并的分支会多一次commit)
+  fast-forward触发流程:  
+  当分支A处于commit-A状态时创建了分支B,分支B在这之后提交了两次来到的commit-C的状态,此时分支A将B合并到当前分支(A);此时会找到分支A和分支B的最后一个<font color="#FF00FF">同源点</font>(即这里的commit-A),假设分支A在同源点之后没有任何提交,则此时会触发<font color="#00FF00">fast-forward</font>
+  触发fast-forward之后分支A和分支B会<font color="#00FF00">规于一点</font>(即commit-C),底层是让分支A的版本指针指向分支B指向的那个版本,例如31条中图上的<font color="#FF00FF">hash4</font>  
+* `git merge --no-ff [Branch]` 禁止fast-forward  
+  将[Branch]分支的内容合并到当前分支,如果没有冲突即触发了fast-forward,则<font color="#00FF00">当前分支会多进行一次提交.</font>并且本次提交信息是自动生成的(和上面的区别是合并之后两条分支处于同一版本,而现在<font color="#00FF00">主动合并</font>的分支会多一次commit)  
+  可以查看第32条  
+  
 
 - - - 
 * `git reset [--mixed/soft/hard] [hash]`  
@@ -238,14 +243,23 @@ B.SourceTree安装教程
 5. 合并分支并不是真正意义上的融合,<font color="#00FF00">只是说将otherBranch分支上所有版本库的操作再对被合并的分支执行一次</font>.(首先AB分支版本相同,A分支删除了一些文件,此时将A分支合并到B分支,B分支就会删除这些文件)  
 6. 合并分支产生冲突时,记住<font color="#00FF00">master分支不应该去处理冲突</font>,而是应该让和master产生冲突的那条分支去处理冲突.(<font color="#FF00FF">即中央分支不解决冲突</font>)冲突分支的那一方首先应该<font color="#00FF00">将master分支合并到当前分支</font>,然后冲突分支再去处理冲突,冲突解决完后再让master分支去合并刚刚冲突的分支.master要做的就是<font color="#FF00FF">通过git reset命令回到合并之前的版本</font>(原因是当master主动去与冲突分支合并时默认就会让master去处理这个冲突,但是不能让master去处理冲突所以要让master回滚到冲突之前的版本)
   这套思想对于fork也是适用的,如果某个仓库发起merge request产生冲突,则当前中央仓库不解决该冲突,而是<font color="#00FF00">让merge request发起方来解决冲突</font>.
-7. 当两个分支的版本相同时并且修改了同一行(合并的时候只会合并版本库),此时合并分支就会产生冲突.如果一个分支的版本领先另一个分支,那么当高版本分支想要合并到低版本分支时就算修改了同一行也不会产生冲突,低版本会直接来到高版本的最新版本.当两个分支产生冲突时,解决完后会进行两次提交,第一次提交相当于克隆目标分支的hash值,第二次提交是解决完冲突后的提交.!!!!!!另外冲突产生的原因还有不规范(比如git cherry-pick [hash]命令跨节点复制)、分支不是同一祖先.
+7. 首先需要先了解fast-forward的产生条件<font color="#00FF00">fast-forward的产生条件</font>,<font color="#FF00FF">当把某个分支合并到当前分支不能产生fast-forward时,并且目标分支修改的内容与当前分支修改的同一行内容时</font>就会产生冲突;  
+   **<font color="#FFC800">判断不能产生fast-forward的条件是:</font>** 找到目标分支和当前分支的最后一个<font color="#00FF00">同源点</font>,如果当前分支在同源点之后还有修改则本次合并就不是fast-forward  
+   **<font color="#FFC800">判断目标分支和当前分支有没有修改同一行的条件是:</font>** 只看目标分支的最后一次提交的内容和当前分支的最后一次提交的内容是否修改了同一行(是这两个commit之间进行比较),<font color="#00FF00">而不是把目标分支的版本库对当前分支重新做一遍</font>  
+   合并之后的版本效果图:  
+   假设分支A和分支B的第一个同源点是commit-origin;之后分支A进行了一次提交commit-A-1;分支B进行了两次提交commit-B-1、commit-B-2;并且它们都修改了同一行  
+   此时将分支B合并到分支A会产生冲突,<font color="#FF00FF">产生冲突就要解决冲突</font>;当冲突解决完毕之后冲突本身会形成一次提交,所以最后分支A的提交记录就应该是<font color="#FFC800">origin-commit->commit-B-1->commit-B-2->commit-A-1->fix CONFLICT</font>  
+   *提示:如果分支B和分支A没有修改同一行,但也构不成fast-forward的话,则分支B(被合并的分支)的提交会放到同源点之后*  
+   <font color="#FF00FF">commit-origin->目标分支的所有commit->主动合并的分支的所有commit</font>  
+   另外冲突产生的原因还有不规范(比如git cherry-pick [hash]命令跨节点复制)、分支不是同一祖先.
+
 8. 远端分支的更改本地是感知不到的
-9. pull request和Fork,Fork完项目后我们在Fork的项目的dev分支中修改代码后在主页点击Compare&pull request,然后填入当前修改的提交信息 然后点击create pull request.然后仓库的拥有者就会审查你的代码进行合并操作.
+9.  pull request和Fork,Fork完项目后我们在Fork的项目的dev分支中修改代码后在主页点击Compare&pull request,然后填入当前修改的提交信息 然后点击create pull request.然后仓库的拥有者就会审查你的代码进行合并操作.
 10. 如果想忽略某些文件,在.git同级目录下创建.gitignore,然后在该文件中填入你需要屏蔽的文件,另外文件的目录也是支持通配符的.
 11. 建议(规范):在功能没有开发完之前不要commit
 12. 规定(必须):在没有开发完毕之前(commit)不能checkout(切换分支)
 13. 在游离状态下,如果对过去的版本进行了修改并且提交了,那么过去版本的后面的版本是不会感知到这次修改的,只有通过新建分支然后合并来达到修改的目的.
-14. 保存现场的前提是要添加到暂存区中,**如果一个文件只存在于工作区那么这个文件是属于任何一个分支的**(不然怎么让你切换分支前要commit呢?)
+14. 保存现场的前提是要添加到暂存区中,<font color="#00FF00">如果一个文件只存在于工作区那么这个文件是属于任何一个分支的</font>(不然怎么让你切换分支前要commit呢?)
 15. 还原现场的时候工作区必须是干净的,如果你不想要现在工作区的内容可以通过git restore [file]将工作区**回滚**到当前HEAD指向的版本.
 16. 如果先保存现场,然后修改了和保存现场同一行的内容,此时提交.然后再还原现场此时就会产生冲突.
 17. 标签和分支是没有关系的,标签不针对分支可以被任意分支看到.
@@ -295,6 +309,17 @@ B.SourceTree安装教程
     > > a.txt  
     > 
     > temp <font color="#00FF00"># 如果这里temp是文件的话它也会被屏蔽</font>  
+30. Git的当前分支不能删除比自已版本高的分支
+    ![不能删除高版本](resources/git/4.png)  
+31. fast-forward流程  
+    ![fast-forward](resources/git/5.png)  
+32. 禁止fast-forward
+    ![no-fast-forward](resources/git/6.png)  
+    此时将dev的两个commit合并到master之后,master还会再创建一个commit,即图中的hash5  
+33. 冲突解决流程图  
+    ![解决冲突](resources/git/7.png)  
+
+
 
 
 
