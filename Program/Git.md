@@ -31,7 +31,8 @@ B.SourceTree安装教程
 * `git add [file0] [file1...]` 将某个文件添加到暂存区
 - - -
 * `git mv [originalFile] [targetFile]`  
-  将`[originalFile]`重命名为`[targetFile]`,底层在执行顺序:复制原始文件并将该文件命名为targetFile->删除originalFile.所以对于git而言就是创建了一个文件并且删除了一个文件.既然是删除就可以利用上面的知识把这个删除的文件还原.<font color="#00FF00">该命令就是Linux的移动命令,除了重命名当然也可以移动一个文件</font>(当然我感觉这些都没什么意义)
+  将`[originalFile]`重命名为`[targetFile]`,底层在执行顺序:第一步是复制原始文件并将该文件命名为targetFile->删除originalFile.所以对于git而言就是创建了一个文件并且删除了一个文件.第二步是将工作区的这两步操作提交到暂存区.既然是删除就可以利用上面的知识把这个删除的文件还原.<font color="#00FF00">该命令就是Linux的移动命令,除了重命名当然也可以移动一个文件</font>(当然我感觉这些都没什么意义)
+  由于移动是先复制再删除,所以此时<font color="#00FF00">从工作区提交到暂存区就有两个命令</font>;一个是新增文件一个是删除文件,所以执行restore命令之后,<font color="#FF00FF">新增的文件状态变为未跟踪,删除的文件状态存在于暂存区</font>
 - - - 
 * `git restore [file]` 将工作区修改的某个文件回滚到当前分支指向的版本库的版本
 * `git restore --staged [file]`  
