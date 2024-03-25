@@ -31,7 +31,8 @@ B.SourceTree安装教程
 * `git add [file0] [file1...]` 将某个文件添加到暂存区
 - - -
 * `git mv [originalFile] [targetFile]`  
-  将`[originalFile]`重命名为`[targetFile]`,底层在执行顺序:复制原始文件并将该文件命名为targetFile->删除originalFile.所以对于git而言就是创建了一个文件并且删除了一个文件.既然是删除就可以利用上面的知识把这个删除的文件还原.<font color="#00FF00">该命令就是Linux的移动命令,除了重命名当然也可以移动一个文件</font>(当然我感觉这些都没什么意义)
+  将`[originalFile]`重命名为`[targetFile]`,底层在执行顺序:第一步是复制原始文件并将该文件命名为targetFile->删除originalFile.所以对于git而言就是创建了一个文件并且删除了一个文件.第二步是将工作区的这两步操作提交到暂存区.既然是删除就可以利用上面的知识把这个删除的文件还原.<font color="#00FF00">该命令就是Linux的移动命令,除了重命名当然也可以移动一个文件</font>(当然我感觉这些都没什么意义)
+  由于移动是先复制再删除,所以此时<font color="#00FF00">从工作区提交到暂存区就有两个命令</font>;一个是新增文件一个是删除文件,所以执行restore命令之后,<font color="#FF00FF">新增的文件状态变为未跟踪,删除的文件状态存在于暂存区</font>
 - - - 
 * `git restore [file]` 将工作区修改的某个文件回滚到当前分支指向的版本库的版本
 * `git restore --staged [file]`  
@@ -47,7 +48,7 @@ B.SourceTree安装教程
 ## 3.分支、版本相关命令 
 * `git commit [-a] [-m ["message"]]` 将缓存区的所有文件提交版本库 
   * -m:添加注释信息 
-  * -a:先将工作区的所有文件添加到暂存区,然后再将暂存区的文件提交
+  * -a:先将工作区的所有文件添加到暂存区,然后再将暂存区的文件提交(一步暂存和提交)
 * `git commit --amend -m ["message"]`  
   修改最近一次提交的提示信息,并且本次修改不会产生commit,这个最好少用
 - - -
@@ -84,8 +85,13 @@ B.SourceTree安装教程
   进入游离状态(如果要修改则必须提交、游离状态是创建分支的好时机,所以此时HEAD指向的是游离的版本)
 - - -
 * `git merge [Branch]` 将[Branch]分支的内容合并到当前分支.
+  fast-forward触发流程:  
+  当分支A处于commit-A状态时创建了分支B,分支B在这之后提交了两次来到的commit-C的状态,此时分支A将B合并到当前分支(A);此时会找到分支A和分支B的最后一个<font color="#FF00FF">同源点</font>(即这里的commit-A),假设分支A在同源点之后没有任何提交,则此时会触发<font color="#00FF00">fast-forward</font>
+  触发fast-forward之后分支A和分支B会<font color="#00FF00">规于一点</font>(即commit-C),底层是让分支A的版本指针指向分支B指向的那个版本,例如31条中图上的<font color="#FF00FF">hash4</font>  
 * `git merge --no-ff [Branch]` 禁止fast-forward  
-  将[Branch]分支的内容合并到当前分支,并且当前分支进行一次提交操作.(和上面的区别是合并之后两条分支处于同一版本,而现在主动合并的分支会多一次commit)
+  将[Branch]分支的内容合并到当前分支,如果没有冲突即触发了fast-forward,则<font color="#00FF00">当前分支会多进行一次提交.</font>并且本次提交信息是自动生成的(和上面的区别是合并之后两条分支处于同一版本,而现在<font color="#00FF00">主动合并</font>的分支会多一次commit)  
+  可以查看第32条  
+  
 
 - - - 
 * `git reset [--mixed/soft/hard] [hash]`  
@@ -98,8 +104,13 @@ B.SourceTree安装教程
   让某个提交不生效,但是该提交并没有真正消失(每一步都会记录).该命令会新提交一次,这个提交就是某个提交不生效后的提交.
 - - -
 * `git stash`  
-  保存现场(该命令针对分支而言,第12条说过没有commit之前是不可以切换分支的,但现在就想切换该怎么办呢?首先git add将内容保存到缓存区、再执行git stash保存现场,此时切换别的分支进行工作,当你再切换回来的时候只会显示当前分支HEAD指向的版本,此时调用git stash list显示所有的现场,通过git stash apply/pop还原现场)当调用完该命令后此时工作区内容变更为当前HEAD指向的版本.
-* `git stash save ["message"]` 保存现场并给现场添加一个message,以便list能轻松查看.如果是git stash保存现场,则现场的信息是hash值.
+  保存现场(该命令针对分支而言,第12条说过没有commit之前是不可以切换分支的,但现在就想切换该怎么办呢?首先git add将内容保存到缓存区、再执行git stash保存现场,此时切换别的分支进行工作,当你再切换回来的时候只会显示当前分支HEAD指向的版本,此时调用git stash list显示所有的现场,通过git stash apply/pop还原现场)当调用完该命令后此时<font color="#00FF00">暂存区变更为现场中保存的内容</font>  
+  <font color="#00FF00">保存现场是将暂存区中的内容保存起来</font>  
+  在游离状态下有两个重要的提示
+  *提示:git stash就是`git stash push`命令的简写*  
+* ~~`git stash save ["message"]` 保存现场并给现场添加一个message,以便list能轻松查看.如果是git stash保存现场,则现场的信息是hash值.~~
+* `git stash push  [-m ["message"]] ` 保存现场
+  * `-m ["message"]` 并给现场添加一个message,以便list能轻松查看.如果是git stash保存现场,则现场的信息是hash值.
 * `git stash list` 显示所有现场,该命令可以得到stashVersion值
 * `git stash pop ["stashversion"]` 指定还原某个现场并删除该现场,如果不加stashversion则会默认还原最新的现场.
 * `git stash apply ["stashversion"]`	指定还原某个现场但是不会删除该现场,如果不加stashversion则会默认还原最新现场.
@@ -185,7 +196,11 @@ B.SourceTree安装教程
 
 ## 5.检查历史/状态相关命令
 * `git status` 查看Git本地仓库的状态
-* `git log` 查看所有commit操作
+* `git log [-graph]` 查看所有commit操作
+  更准确的说这条命令是<font color="#00FF00">查看当前HEAD指针指向的版本及该版本之前的commit信息</font>,至于采用这种说法就是为了描述<font color="#FF00FF">版本穿梭</font>和`git reflog`命令形成对比
+  * `-graph`:以图的形式显示所有提交记录
+  * `--pretty=oneline`:只显示hash值和提交信息(这个选项会忽略很多信息)
+  * `--abbrev-commit`:只显示提交hash值的前7位
 * `git reflog` 查看所有操作记录
 * `git show ["tag"]` 查看标签的详细信息
 * `git blame [files]` 查看一个文件的每一行是谁写的
@@ -237,31 +252,47 @@ B.SourceTree安装教程
 5. 合并分支并不是真正意义上的融合,<font color="#00FF00">只是说将otherBranch分支上所有版本库的操作再对被合并的分支执行一次</font>.(首先AB分支版本相同,A分支删除了一些文件,此时将A分支合并到B分支,B分支就会删除这些文件)  
 6. 合并分支产生冲突时,记住<font color="#00FF00">master分支不应该去处理冲突</font>,而是应该让和master产生冲突的那条分支去处理冲突.(<font color="#FF00FF">即中央分支不解决冲突</font>)冲突分支的那一方首先应该<font color="#00FF00">将master分支合并到当前分支</font>,然后冲突分支再去处理冲突,冲突解决完后再让master分支去合并刚刚冲突的分支.master要做的就是<font color="#FF00FF">通过git reset命令回到合并之前的版本</font>(原因是当master主动去与冲突分支合并时默认就会让master去处理这个冲突,但是不能让master去处理冲突所以要让master回滚到冲突之前的版本)
   这套思想对于fork也是适用的,如果某个仓库发起merge request产生冲突,则当前中央仓库不解决该冲突,而是<font color="#00FF00">让merge request发起方来解决冲突</font>.
-7. 当两个分支的版本相同时并且修改了同一行(合并的时候只会合并版本库),此时合并分支就会产生冲突.如果一个分支的版本领先另一个分支,那么当高版本分支想要合并到低版本分支时就算修改了同一行也不会产生冲突,低版本会直接来到高版本的最新版本.当两个分支产生冲突时,解决完后会进行两次提交,第一次提交相当于克隆目标分支的hash值,第二次提交是解决完冲突后的提交.!!!!!!另外冲突产生的原因还有不规范(比如git cherry-pick [hash]命令跨节点复制)、分支不是同一祖先.
+7. 首先需要先了解fast-forward的产生条件<font color="#00FF00">fast-forward的产生条件</font>,<font color="#FF00FF">当把某个分支合并到当前分支不能产生fast-forward时,并且目标分支修改的内容与当前分支修改的同一行内容时</font>就会产生冲突;  
+   **<font color="#FFC800">判断不能产生fast-forward的条件是:</font>** 找到目标分支和当前分支的最后一个<font color="#00FF00">同源点</font>,如果当前分支在同源点之后还有修改则本次合并就不是fast-forward  
+   *也即当前分支的最后一次提交就是同源点*  
+   **<font color="#FFC800">判断目标分支和当前分支有没有修改同一行的条件是:</font>** 只看目标分支的最后一次提交的内容和当前分支的最后一次提交的内容是否修改了同一行(是这两个commit之间进行比较),<font color="#00FF00">而不是把目标分支的版本库对当前分支重新做一遍</font>  
+   合并之后的版本效果图:  
+   假设分支A和分支B的第一个同源点是commit-origin;之后分支A进行了一次提交commit-A-1;分支B进行了两次提交commit-B-1、commit-B-2;并且它们都修改了同一行  
+   此时将分支B合并到分支A会产生冲突,<font color="#FF00FF">产生冲突就要解决冲突</font>;当冲突解决完毕之后冲突本身会形成一次提交,所以最后分支A的提交记录就应该是<font color="#FFC800">origin-commit->commit-A-1->commit-B-1->commit-B-2->fix CONFLICT</font>  
+   *提示:如果分支B和分支A没有修改同一行,但也构不成fast-forward的话,则分支B(被合并的分支)的提交会放到分支A最后一次提交的后面,即:*  
+   <font color="#FF00FF">commit-origin->主动合并的分支的所有commit->目标分支的所有commit</font>  
+   另外冲突产生的原因还有不规范(比如git cherry-pick [hash]命令跨节点复制)、分支不是同一祖先.
+
 8. 远端分支的更改本地是感知不到的
-9. pull request和Fork,Fork完项目后我们在Fork的项目的dev分支中修改代码后在主页点击Compare&pull request,然后填入当前修改的提交信息 然后点击create pull request.然后仓库的拥有者就会审查你的代码进行合并操作.
+9.  pull request和Fork,Fork完项目后我们在Fork的项目的dev分支中修改代码后在主页点击Compare&pull request,然后填入当前修改的提交信息 然后点击create pull request.然后仓库的拥有者就会审查你的代码进行合并操作.
 10. 如果想忽略某些文件,在.git同级目录下创建.gitignore,然后在该文件中填入你需要屏蔽的文件,另外文件的目录也是支持通配符的.
 11. 建议(规范):在功能没有开发完之前不要commit
-12. 规定(必须):在没有开发完毕之前(commit)不能checkout(切换分支)
+12. 规定(必须):在没有开发完毕之前(commit)不能checkout(切换分支),<font color="#00FF00">如果硬要切换分支可以保存现场</font>
 13. 在游离状态下,如果对过去的版本进行了修改并且提交了,那么过去版本的后面的版本是不会感知到这次修改的,只有通过新建分支然后合并来达到修改的目的.
-14. 保存现场的前提是要添加到暂存区中,**如果一个文件只存在于工作区那么这个文件是属于任何一个分支的**(不然怎么让你切换分支前要commit呢?)
-15. 还原现场的时候工作区必须是干净的,如果你不想要现在工作区的内容可以通过git restore [file]将工作区**回滚**到当前HEAD指向的版本.
-16. 如果先保存现场,然后修改了和保存现场同一行的内容,此时提交.然后再还原现场此时就会产生冲突.
-17. 标签和分支是没有关系的,标签不针对分支可以被任意分支看到.
-18. master分支一般很少改变,dev分支一般用来开发,test分支用来测试.master一般就是生产阶段了
-19. 当通过git checkout origin/master切换到远程分支时会处于一个游离状态.所以既然是处于游离状态,就不是真正意义上的切换分支,而是到达了远程分支的某个版本,即没有切换远程分支的说法,切换到远程分支就是进入游离状态.
-20. 如果项目是克隆下来的,则这个项目是不需要执行`git push -u origin [LocalBranch]`操作的.
-21. 假设A和B同时修改了同一行,A先commit并且push到远程.B再commit并且push到远程,由于修改了同一行必然产生冲突,所以B的这次push压根就不会成功,此时B就需要先pull,pull完了之后因为修改了同一行必然有冲突所以此时B就要去解决这个冲突,解决完后push(会有两次commit)
-22. 本地有的远程没有的分支,用`git push -u origin [branchName]`(或者`git push origin`) 在远程创建分支并和本地关联,远程有的本地没有的可以使用`git branch [newBranchName] [originBranchName/tagName]`命令来基于本地的远程分支创建本地分支或者看git pull [remoteBranch]:[localBranch]
-23. 对于一个有关联的分支,实际上是有3条分支.第一条就是本地的分支,第二条就是远程的分支,第三条是本地的远程分支(用该分支来感应远程分支)
-24. 标签的性质和文件是一样的,如果一个标签本地有远程没有,调用<font color="#00FF00">git pull之后本地有的标签是不会删除的</font>.所以有些时候文件和标签是可以类比的,实际上一个标签在.git目录里就有与之对应的文件.
-25. 当我们通过git submodule关联另外一个项目时,假设另外一个项目的内容发生改变并且push了,但是原项目是感知不到这次提交的,所以我们必须进入到原项目的依赖项目然后通过git pull更新依赖项目,但是这次pull只是将本地的依赖项目更新了,远程的依赖还没有更新,此时在原项目执行 git add->git commit->git push才能让远程更新.
-26. 没有命令直接解除当前项目的关联项目,首先执行git restore --staged [file]将依赖项目的文件夹从缓存区删除,然后删除依赖项目文件夹.->git add ->git commit ->git push
-27. 25、26介绍的都是单向依赖,在这种依赖环境下原项目是不能直接修改依赖项目的远程内容的(当然本地的可以修改).而在互相依赖状态下当前项目修改完依赖项目后可以push到远程,远程就可以被改变.
-28. Git与SVN的区别:  
+14. 保存现场的前提是要添加到暂存区中,<font color="#00FF00">如果一个文件只存在于工作区那么这个文件是属于任何一个分支的</font>(不然怎么让你切换分支前要commit呢?)
+    <font color="#FF00FF">切换分支之前暂存区不能有内容,否则会直接报错</font>  
+    <font color="#FF00FF">切换分支前,如果工作区有未跟踪的文件,并且该文件存在于目标分支,则会直接报错;</font>  
+15. * <font color="#00FF00">还原现场的时候如果工作区新建了一个文件(<font color="#FF00FF">未跟踪</font>)并且该文件已经存在于现场中,则本次还原会直接报错</font>  
+    * <font color="#00FF00">还原现场的时候如果暂存区,拥有现场里的文件则会产生冲突</font>  
+    * <font color="#00FF00">还原现场的时候如果现场里的文件和工作区中的文件不是来源于同一commit则会产生冲突</font>  
+    假设现在的master分支对file.txt文件做了修改然后将本次修改提交到暂存区,再保存现场;接着master又对file.txt文件做了修改然后将其提交,此时如果还原现场则会产生冲突.  
+    * 流程图:  
+      ![还原现场冲突流程](resources/git/9.png)  
+16. 标签和分支是没有关系的,标签不针对分支可以被任意分支看到.
+17. master分支一般很少改变,dev分支一般用来开发,test分支用来测试.master一般就是生产阶段了
+18. 当通过git checkout origin/master切换到远程分支时会处于一个游离状态.所以既然是处于游离状态,就不是真正意义上的切换分支,而是到达了远程分支的某个版本,即没有切换远程分支的说法,切换到远程分支就是进入游离状态.
+19. 如果项目是克隆下来的,则这个项目是不需要执行`git push -u origin [LocalBranch]`操作的.
+20. 假设A和B同时修改了同一行,A先commit并且push到远程.B再commit并且push到远程,由于修改了同一行必然产生冲突,所以B的这次push压根就不会成功,此时B就需要先pull,pull完了之后因为修改了同一行必然有冲突所以此时B就要去解决这个冲突,解决完后push(会有两次commit)
+21. 本地有的远程没有的分支,用`git push -u origin [branchName]`(或者`git push origin`) 在远程创建分支并和本地关联,远程有的本地没有的可以使用`git branch [newBranchName] [originBranchName/tagName]`命令来基于本地的远程分支创建本地分支或者看git pull [remoteBranch]:[localBranch]
+22. 对于一个有关联的分支,实际上是有3条分支.第一条就是本地的分支,第二条就是远程的分支,第三条是本地的远程分支(用该分支来感应远程分支)
+23. 标签的性质和文件是一样的,如果一个标签本地有远程没有,调用<font color="#00FF00">git pull之后本地有的标签是不会删除的</font>.所以有些时候文件和标签是可以类比的,实际上一个标签在.git目录里就有与之对应的文件.
+24. 当我们通过git submodule关联另外一个项目时,假设另外一个项目的内容发生改变并且push了,但是原项目是感知不到这次提交的,所以我们必须进入到原项目的依赖项目然后通过git pull更新依赖项目,但是这次pull只是将本地的依赖项目更新了,远程的依赖还没有更新,此时在原项目执行 git add->git commit->git push才能让远程更新.
+25. 没有命令直接解除当前项目的关联项目,首先执行git restore --staged [file]将依赖项目的文件夹从缓存区删除,然后删除依赖项目文件夹.->git add ->git commit ->git push
+26. 25、26介绍的都是单向依赖,在这种依赖环境下原项目是不能直接修改依赖项目的远程内容的(当然本地的可以修改).而在互相依赖状态下当前项目修改完依赖项目后可以push到远程,远程就可以被改变.
+27. Git与SVN的区别:  
     SVN是<font color="#00FF00">集中式版本控制系统</font>,需要联网才能工作必须不停地与服务器进行同步.  
     而Git是<font color="#00FF00">分布式版本控制系统</font>,每个人的电脑都是一个<font color="#FFC800">完整</font>的版本库,工作的时候不需要联网,只要把修改的文件推送给对方即可.
-29. <font color="#FFC800">.gitignore</font>指定跟踪规则,主要看/在前面还是在后面  
+28. <font color="#FFC800">.gitignore</font>指定跟踪规则,主要看/在前面还是在后面  
     *提示:如果一个文件夹里面没有任何内容则该文件夹默认被屏蔽,而且这个<font color="#00FF00">文件夹无法被添加到暂存区</font>*  
     <font color="#00FF00">temp</font>:取消跟踪当前项目下temp文件及所有temp目录,假设现在项目路径结构如下:  
     > .gitignore  
@@ -294,9 +325,29 @@ B.SourceTree安装教程
     > > a.txt  
     > 
     > temp <font color="#00FF00"># 如果这里temp是文件的话它也会被屏蔽</font>  
-30. fast-forward本质是指针的移动  
+29. Git的当前分支不能删除比自已版本高的分支
+    ![不能删除高版本](resources/git/4.png)  
+30. fast-forward流程  
+    ![fast-forward](resources/git/5.png)  
     假设分支A处于commit-A在此状态下创建了分支B,接着分支B提交了两次来到了<font color="#FFC800">commit-C</font>状态,此时将分支B合并到分支A,找到分支A和分支B的第一个<font color="#00FF00">同源点(这里是commit-A)</font>,由于分支A在此之后没有任何commit,所以会直接把分支A的<font color="#FF00FF">指针</font>指向<font color="#FFC800">commit-C</font>这次提交  
     <font color="#00FF00">fast-forward最终会归为一点</font>,例如下图中的hash4  
+31. 禁止fast-forward
+    ![no-fast-forward](resources/git/6.png)  
+    此时将dev的两个commit合并到master之后,master还会再创建一个commit,即图中的hash5  
+32. 冲突解决流程图  
+    ![解决冲突](resources/git/7.png)  
+33. 工作区的回滚(各种意义上的)使用的都是`git restore`,而暂存区的回滚(各种意义上的)使用的都是`git restore --staged`  
+34. 版本回滚流程图
+    ![版本回滚](resources/git/8.png)
+    HEAD可以有多份,<font color="#00FF00">一个HEAD就是一个阵营</font>,比如这里的HEAD1和HEAD2;git log命令本质只能看到<font color="#FF00FF">origin-head</font>所在阵营的提交记录,不能看别的阵营  
+    <font color="#FF00FF">origin-head只有一份</font>,当origin-head切换为某个阵营的<font color="#FFC800">最后一次提交</font>时,自动变成这个阵营  
+    当origin-head切换到当前阵营的历史版本并产生一个提交时会<font color="#00FF00">创建一个新的阵营</font>,<font color="#FFC800">这个阵营新的提交信息只能跟着origin-head这个老大走</font>  
+35. 版本穿梭的本质是创建一个看不到的分支,并且该分支的名称就是目标版本的hash值,该分支的版本就是目标版本;
+    在游离状态(版本穿梭后的状态就是游离状态)下<font color="#FFC800">如果对文件进行修改就必须要提交</font>,提交就会产生新的hash,因为版本穿梭是创建新的分支所以本次提交对源分支master是不可见的  
+    <font color="#FF00FF">游离状态是创建分支的好时机,版本穿梭就是用于创建分支的</font>  
+    实际上版本穿梭并不是分支,<font color="#00FF00">游离的本意就是当前不处于任何分支</font>,这里只是便于理解;因为它并不具有分支的一些特征,比如分支重命名  
+    如果想退出版本穿梭,只要执行`git switch`切换分支(例如master)即可  
+
 
 
 
