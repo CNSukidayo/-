@@ -84,7 +84,7 @@ B.SourceTree安装教程
   进入游离状态(如果要修改则必须提交、游离状态是创建分支的好时机,所以此时HEAD指向的是游离的版本)
 - - -
 * `git merge [Branch]` 将[Branch]分支的内容合并到当前分支.
-* `git merge --no-ff [Branch]`  
+* `git merge --no-ff [Branch]` 禁止fast-forward  
   将[Branch]分支的内容合并到当前分支,并且当前分支进行一次提交操作.(和上面的区别是合并之后两条分支处于同一版本,而现在主动合并的分支会多一次commit)
 
 - - - 
@@ -294,6 +294,9 @@ B.SourceTree安装教程
     > > a.txt  
     > 
     > temp <font color="#00FF00"># 如果这里temp是文件的话它也会被屏蔽</font>  
+30. fast-forward本质是指针的移动  
+    假设分支A处于commit-A在此状态下创建了分支B,接着分支B提交了两次来到了<font color="#FFC800">commit-C</font>状态,此时将分支B合并到分支A,找到分支A和分支B的第一个<font color="#00FF00">同源点(这里是commit-A)</font>,由于分支A在此之后没有任何commit,所以会直接把分支A的<font color="#FF00FF">指针</font>指向<font color="#FFC800">commit-C</font>这次提交  
+    <font color="#00FF00">fast-forward最终会归为一点</font>,例如下图中的hash4  
 
 
 
