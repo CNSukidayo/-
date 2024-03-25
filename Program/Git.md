@@ -19,13 +19,6 @@ B.SourceTree安装教程
 * `git clone --branch [tags] [addr]` 克隆指定Tag(标签)的项目到本地
 - - -
 * `git help` 获取git帮助
-- - -
-* `git config --global [propertiesKey] [propertiesValue]`  
-  设置git的全局配置,例如:  
-  `git config --global user.name "userName"` 设置提交的用户名  
-  `git config --global user.email xxx@qq.com` 设置提交的邮箱  
-* `git config --global --unset [propertiesKey]` 重置全局配置
-
 
   
 ## 2.修改当前的更改(包括工作区和暂存区)
@@ -34,20 +27,66 @@ B.SourceTree安装教程
 * `git mv [originalFile] [targetFile]`  
   将`[originalFile]`重命名为`[targetFile]`,底层在执行顺序:第一步是复制原始文件并将该文件命名为targetFile->删除originalFile.所以对于git而言就是创建了一个文件并且删除了一个文件.第二步是将工作区的这两步操作提交到暂存区.既然是删除就可以利用上面的知识把这个删除的文件还原.<font color="#00FF00">该命令就是Linux的移动命令,除了重命名当然也可以移动一个文件</font>(当然我感觉这些都没什么意义)
   由于移动是先复制再删除,所以此时<font color="#00FF00">从工作区提交到暂存区就有两个命令</font>;一个是新增文件一个是删除文件,所以执行restore命令之后,<font color="#FF00FF">新增的文件状态变为未跟踪,删除的文件状态存在于暂存区</font>
-- - - 
+- - -  
 * `git restore [file]` 将工作区修改的某个文件回滚到当前分支指向的版本库的版本
 * `git restore --staged [file]`  
   放弃某个文件被添加到暂存区的这一步操作(只是放弃,在工作区的该文件不会回滚到暂存区的该文件)此时提交就不会提交该文件了  
   假设文件A的内容一开始是1,添加到暂存区后;修改文件A的内容为2,接着使用该命令放弃暂存区,此时再查看该文件的内容为2(并没有变为暂存区的1),所以可以理解为从来没有这次暂存,既然没有这次暂存,则工作区的文件内容当然是你现在的内容了
-- - - 
+- - -  
 * `git rm [-f] [--cache] [file]`  
   * 删除一个文件;这种删除会分为两步第一步是在工作区中有删除的操作,第二步是将工作区的删除操作提交到暂存区.所以如果要恢复该文件,首先要放弃本次暂存,其次由于在工作区也删除了,所以要回滚工作区到当前分支指向的版本库,所以这种情况<font color="#00FF00">只适用于文件没有修改的情况</font>  
   * `-f`:如果文件已经在工作区进行了修改(**这次修改可以添加到暂存区也可以不添加到暂存区**),则必须使用`-f`进行强制删除;恢复的时候流程与上一条一样,所以这次修改就不会保留了
   * `--cache`:如果文件已经在工作区进行了修改(**这次修改可以添加到暂存区也可以不添加到暂存区**),使用`--cache`的本质和-f没有什么区别,都会把文件删除的操作一直推到暂存区,只不过`--cache`会取消跟踪该文件;该文件还是会存在于工作区,只不过git不对它进行管理了.<font color="#00FF00">如果此时提交则版本库中确实会把该文件删除,但是工作区还是有的</font>.该命令和`.gitignore`搭配使用效果非常好.  
   * 如果是直接删除文件即在操作系统层面的删除,则这次删除就是工作区的改变;如果想回滚的话会回滚到HEAD指向的版本
+- - -  
+* `git diff [-u] [objectHash] [--cached [objectHash]]` 比较工作区、暂存区、对象区中文件的差异,文件差异比较中需要弄清楚谁是<font color="#FF00FF">主动文件</font>,因为比较结果的意思是当<font color="#FF00FF">主动文件</font>应用<font color="#00FF00">差异信息</font>后得到<font color="#FFC800">目标文件</font>  
+  diff命令用减号`-`代表主动文件,用加号`+`代表目标文件  
+  如果不加任何参数即执行`git diff -u`则默认比较暂存区和工作区所有文件的差异(暂存区是主动文件,工作区是目标文件)  
+  * `-u`:显示更详细的信息,一般都会加上该参数
+  * `objectHash`:比较objectHash对应对象区和工作区的差异(对象区是主动文件,工作区是目标文件)  
+  * `--cached [objectHash]`:比较objectHash对应对象区和工作区的差异(对象区是主动文件,暂存区是目标文件)
+  - - -
+  假设现在工作区中b.txt文件的内容如下:  
+  ```java
+  11111
+  22222
+  33333
+  44444
+  ```
+  现在暂存区中b.txt文件的内容如下:  
+  ```java
+  11111
+  22222
+  33333
+  44444-change
+  ```  
+  执行`git diff`命令后的效果如下:  
+  ```java
+  diff --git a/b.txt b/b.txt
+  index 9589b4b..c387961 100644
+  --- a/b.txt
+  +++ b/b.txt
+  @@ -1,4 +1,4 @@
+   111111
+   222222
+   333333
+  -444444-change
+  +444444
+  ```
+  `---`代表主动文件,这里就是暂存区中的文件b.txt为主动文件  
+  `+++`代表目标文件,这里就是工作区中的文件b.txt为目标文件  
+  `-1,4`代表从主动文件的第1行开始与目标文件进行差异分析,负号代表是主动文件,1代表是从第一行开始;4代表一共比较四行(不是到第4行)  
+  `+1,4`代表从目标文件的第1行开始与主动文件进行差异分析,加号代表是目标文件,1代表是从第一行开始;4代表一共比较四行(不是到第4行)  
+  后面的内容都是针对主动文件而言的,意识是对于主动文件的这1-4行,前三行不变(前三行前面没有符号就代表不变);把第四行删掉(-444444-change前面的减号就是删除),再加上444444(+44444前面的加号就是增加)的内容就能变为目标文件  
+  **所以通过差异信息就能将主动文件变为目标文件**  
+  - - -
+  工作区、暂存区、对象区之间的比较关系:  
+  ![比较关系](resources/git/10.png)  
+  一句话总结:<font color="#00FF00">右边的是主动文件,左边的是被动文件</font>  
+
 
 ## 3.分支、版本相关命令 
-* `git commit [-a] [-m ["message"]]` 将缓存区的所有文件提交版本库 
+* `git commit [-a] [-m "message"]` 将缓存区的所有文件提交版本库 
   * -m:添加注释信息 
   * -a:先将工作区的所有文件添加到暂存区,然后再将暂存区的文件提交(一步暂存和提交)
 * `git commit --amend -m ["message"]`  
@@ -107,23 +146,26 @@ B.SourceTree安装教程
 * `git stash`  
   保存现场(该命令针对分支而言,第12条说过没有commit之前是不可以切换分支的,但现在就想切换该怎么办呢?首先git add将内容保存到缓存区、再执行git stash保存现场,此时切换别的分支进行工作,当你再切换回来的时候只会显示当前分支HEAD指向的版本,此时调用git stash list显示所有的现场,通过git stash apply/pop还原现场)当调用完该命令后此时<font color="#00FF00">暂存区变更为现场中保存的内容</font>  
   <font color="#00FF00">保存现场是将暂存区中的内容保存起来</font>  
-  在游离状态下有两个重要的提示
   *提示:git stash就是`git stash push`命令的简写*  
 * ~~`git stash save ["message"]` 保存现场并给现场添加一个message,以便list能轻松查看.如果是git stash保存现场,则现场的信息是hash值.~~
-* `git stash push  [-m ["message"]] ` 保存现场
-  * `-m ["message"]` 并给现场添加一个message,以便list能轻松查看.如果是git stash保存现场,则现场的信息是hash值.
-* `git stash list` 显示所有现场,该命令可以得到stashVersion值
+* `git stash push  [-m "message"] ` 保存现场
+  * `-m "message"` 并给现场添加一个message,以便list能轻松查看.如果是git stash保存现场,则现场的信息是hash值.
+* `git stash list` 显示所有现场,该命令可以得到stashVersion值  
+  *提示:stashVersion是形如`stash{0}`一类的值*  
+  git stash是按照<font color="#00FF00">栈</font>的方式进行存放的,最后存放的现场最先被还原,最先存放的现场最后被还原  
 * `git stash pop ["stashversion"]` 指定还原某个现场并删除该现场,如果不加stashversion则会默认还原最新的现场.
-* `git stash apply ["stashversion"]`	指定还原某个现场但是不会删除该现场,如果不加stashversion则会默认还原最新现场.
+* `git stash apply ["stashversion"]` 指定还原某个现场但是不会删除该现场,如果不加stashversion则会默认还原最新现场.
 * `git stash drop ["stashversion"]`	删除一个现场 
 - - -
 * `git tag ["tag"]`  
-  给最新一次提交打上一个标签,一次commit可以添加多个标签,使用这种方式创建的标签的hash值和当前HEAD指向的hash值相同.
+  给最新一次提交打上一个标签,一次commit可以添加多个标签,使用这种方式创建的标签的hash值和当前HEAD指向的hash值相同.  
+  标签是针对整个项目的,跟某个分支没有关系,也可以理解标签就是一种分支  
 * `git tag -a ["tag"] -m ["tagMessage"]`  
-  给最新一次提交打上一个标签并且添加提示信息,使用这种方式创建的标签的hash值和HEAD指向的commit的hash值不相同.但使用该方法创建的标签包含当前HEAD指向的commit的hash值这个信息.<font color="#00FF00">一般用这个!!!</font>
+  给最新一次提交打上一个标签并且添加提示信息,使用这种方式创建的标签的hash值和HEAD指向的commit的hash值不相同.但使用该方法创建的标签包含当前HEAD指向的commit的hash值这个信息.<font color="#00FF00">一般用这个!!!</font>  
 * `git tag -d ["tag"]` 删除一个标签
 * `git tag` 查看所有标签(标签就是github里的relessases)
-* `git tag -l ["vagueTagMessage"]` 模糊查询一个标签
+* `git tag -l ["vagueTag"]` 模糊查询一个标签
+  模糊查询支持*通配符
 * `git show ["tag"]` 查看标签的详细信息
 - - - 
 * `git cherry-pick [hash]`  
@@ -212,6 +254,21 @@ B.SourceTree安装教程
 - - -
 * `git config -l`  
   显示git自身的配置信息,本质上该命令就是显示两个文件的内容,一个是git安装目录下/etc/gitconfig配置文件,一个是用户目录下的~/.gitconfig配置文件
+* `git config [--system|--global|--local] [propertiesKey] [propertiesValue]` 设置git配置  
+  * `--system|--global|--local` 指定配置的级别  
+    * `--system`:设置系统级别的配置  
+    * `--global`:设置当前用户级别的配置  
+    * `--local`:设置项目级别的配置  
+  - - -
+  例如:  
+  `git config --global user.name "userName"` 设置提交的用户名  
+  `git config --global user.email xxx@qq.com` 设置提交的邮箱  
+* `git config --global --unset [propertiesKey]` 重置全局配置
+- - -
+* `git version` 查看Git的版本  
+* `git blame [file]` 追踪文件责任人,通过该命令可以看到某个文件的每一行是被谁写的被谁修改的,并且每一行都有一个hash值  
+  * `file`:具体要查看的文件
+
 
 
 
@@ -272,14 +329,14 @@ B.SourceTree安装教程
 13.  规定(必须):在没有开发完毕之前(commit)不能checkout(切换分支),<font color="#00FF00">如果硬要切换分支可以保存现场</font>
 14.  在游离状态下,如果对过去的版本进行了修改并且提交了,那么过去版本的后面的版本是不会感知到这次修改的,只有通过新建分支然后合并来达到修改的目的.
 15.  保存现场的前提是要添加到暂存区中,<font color="#00FF00">如果一个文件只存在于工作区那么这个文件是属于任何一个分支的</font>(不然怎么让你切换分支前要commit呢?)
-    <font color="#FF00FF">切换分支之前暂存区不能有内容,否则会直接报错</font>  
+    <font color="#FF00FF">切换分支之前暂存区不能有内容,否则会直接报错</font>*(除非这两个分支处于同一个commit版本,但需要记住暂存区有内容就不要切换分支)*  
     <font color="#FF00FF">切换分支前,如果工作区有未跟踪的文件,并且该文件存在于目标分支,则会直接报错;</font>  
-16.  * <font color="#00FF00">还原现场的时候如果工作区新建了一个文件(<font color="#FF00FF">未跟踪</font>)并且该文件已经存在于现场中,则本次还原会直接报错</font>  
+16. * <font color="#00FF00">还原现场的时候如果工作区新建了一个文件(<font color="#FF00FF">未跟踪</font>)并且该文件已经存在于现场中,则本次还原会直接报错</font>  
     * <font color="#00FF00">还原现场的时候如果暂存区,拥有现场里的文件则会产生冲突</font>  
     * <font color="#00FF00">还原现场的时候如果现场里的文件和工作区中的文件不是来源于同一commit则会产生冲突</font>  
     假设现在的master分支对file.txt文件做了修改然后将本次修改提交到暂存区,再保存现场;接着master又对file.txt文件做了修改然后将其提交,此时如果还原现场则会产生冲突.  
     * 流程图:  
-      ![还原现场冲突流程](resources/git/9.png)  
+    ![还原现场冲突流程](resources/git/9.png)  
 17. 标签和分支是没有关系的,标签不针对分支可以被任意分支看到.
 18. master分支一般很少改变,dev分支一般用来开发,test分支用来测试.master一般就是生产阶段了
 19. 当通过git checkout origin/master切换到远程分支时会处于一个游离状态.所以既然是处于游离状态,就不是真正意义上的切换分支,而是到达了远程分支的某个版本,即没有切换远程分支的说法,切换到远程分支就是进入游离状态.
