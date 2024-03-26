@@ -99,7 +99,8 @@ B.SourceTree安装教程
   * -vv:查看本地分支的当前版本、当前commit、和远程分支关联的情况
   * -avv:查看本地分支+远程分支的当前版本、当前commit、和远程分支关联的情况
 * `git branch [branchName]` 创建分支
-* ~~`git branch [newBranchName] [originBranchName/tagName]` 基于分支/标签创建分支,该方法可以基于一个分支或者标签去创建一个分支;所以仅从创建分支角度而言<font color="#00FF00">标签可以视作分支</font>,方法被废弃,详情见`git switch`~~
+* ~~`git branch [newBranchName] [originBranchName/tagName]` 基于分支/标签创建分支,该方法可以基于一个分支或者标签去创建一个分支;所以仅从创建分支角度而言<font color="#00FF00">标签可以视作分支</font>~~ 
+  方法被废弃,详情见`git switch`
 * `git branch [-d] [branchName]`  
   删除分支,不能删除当前分支,并且<font color="#00FF00">当前分支不能删除比自已版本高的分支</font>
 * `git branch [-D] [branchName]`  强制删除该分支(不建议使用)
@@ -111,6 +112,7 @@ B.SourceTree安装教程
   * `-c`:如果不存在该分支就创建该分支
 * `git switch -c [localBranch] [originBranchName/tagName]` 基于分支/标签创建分支,该方法可以基于一个分支或者标签去创建一个分支;所以仅从创建分支角度而言<font color="#00FF00">标签可以视作分支</font>  
   该方法同样可以基于远程分支创建一个本地分支,<font color="#00FF00">使用该方法创建的本地分支会默认关联远程分支</font>  
+  *注意:使用该方法基于远程分支创建本地分支时,第二个参数originBranchName必须要以`remoteAddressName/branchName`的方式指定,例如`origin/dev`*  
 - - - 
 * ~~`git checkout [-b] [branchName]`~~ 切换到一个分支  
   提示:checkout语义不明确,改用`git switch`  
@@ -223,6 +225,7 @@ B.SourceTree安装教程
 * `git push [-u] [remoteAddressName] [LocalBranch]`  
   将本地的<font color="#FF00FF">一个</font>分支<font color="#00FF00">推送到远程的`remoteAddressName`仓库</font>执行该命令时需要进入将要关联的本地分支,并且LocalBranch要和本地分支的名称一致.  
   *注意:如果远程已经有该分支了,<font color="#FF00FF">并且远程分支和本地分支不是同一个分支则会直接报错</font>,如果是同一个分支则会将本地分支与远程分支关联*
+  *<font color="#00FF00">如果有的时候本地的某个分支没有和远程的分支关联</font>,就可以使用`-u`参数*
   * `remoteAddressName`:远程仓库的名称
   * `-u`:如果远程没有该分支则需要该参数(即第一次推送需要该参数),<font color="#00FF00">添加该参数会使当前分支默认关联远程分支</font>,后续将本地分支推送到远程时就不需要使用该参数了
 * `git push [remoteAddressName] --delete [remoteBranch]` 删除远程分支,见22条  
