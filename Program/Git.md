@@ -202,12 +202,13 @@ B.SourceTree安装教程
 
 
 ## 4.远程协作
-* `git remote add origin [remoteAddr]`  
-  将本地项目关联到远程(对于新项目而言).注意origin是可变内容(一般不建议修改),由于项目远程地址一般都很长,所以第一次在关联的时候就通过origin代表我们的远程项目地址
+* `git remote add [remoteAddressName] [remoteAddr]`  
+  将当前项目关联一个远程仓库,注意`remoteAddressName`是可变内容,一个项目可以关联多个远程仓库,<font color="#00FF00">比如源项目为upstream,自已fork的仓库为origin</font>,详情见第2条
+  * `remoteAddressName`:远程仓库的名称
   * `remoteAddr`:远程仓库地址
-* `git remote rm origin`  
-  删除远程分支,该<font color="#00FF00">远程分支</font>是和当前分支对应的分支.删除了之后就相当于本地有这个分支远程没有这个分支的情况,见22条
-* `git remote show` 查看远程分支的根名称(该方法一般返回origin),也就是执行`git remote add origin [remoteAddr]`命令中设置的origin
+* `git remote rm [remoteAddressName]`  
+  解除当前与`remoteAddressName`远程仓库的关联;见22条
+* `git remote show` 查看当前项目关联了哪些远程仓库(一个项目可以关联多个远程仓库,一般返回origin、upstream)
 * `git remote show origin`  
   查看当前对应分支是否过期(相较于远程)以及显示远程仓库地址,以及本地分支与远程分支关联的情况
 * `git remote prune origin --dry-run`  
@@ -217,12 +218,14 @@ B.SourceTree安装教程
 * `git remote set-head origin [remoteBranch]`
   设置远程HEAD指向某个分支;remoteBranch:远程分支的名称
 - - - 
-* `git push -u origin [LocalBranch]`  
-  将本地的一个分支推送给远程,并且将本地分支和远程分支关联.对于刚创建的项目要添加 -u (如果是基于HTTP需要输入账户密码,如果是SSH则不需要)上面说过origin就代表远程项目地址,所以这一步操作可以理解为关联远程分支,而远程项目地址一般都很长,不过通过git remote add操作后origin就指代远程项目地址.执行该命令时需要进入将要关联的本地分支,并且LocalBranch要和本地分支的名称一致.
+* `git push -u [remoteAddressName] [LocalBranch]`  
+  将本地的<font color="#FF00FF">一个</font>分支<font color="#00FF00">推送到远程</font>,并且将本地分支和远程分支关联.对于刚创建的项目要添加 -u (如果是基于HTTP需要输入账户密码,如果是SSH则不需要)上面说过origin就代表远程项目地址,所以这一步操作可以理解为关联远程分支,而远程项目地址一般都很长,不过通过git remote add操作后origin就指代远程项目地址.执行该命令时需要进入将要关联的本地分支,并且LocalBranch要和本地分支的名称一致.
+  * `remoteAddressName`:远程仓库的名称
 * `git push origin --delete origin`  
-  删除远程分支,该分支是和当前分支对应的分支.删除了之后就相当于本地有这个分支远程没有这个分支的情况,见22条
+  删除远程分支,该分支是和当前分支对应的分支.删除了之后就相当于本地有这个分支远程没有这个分支的情况,见22条  
+  <font color="#00FF00">这条命令实际上就是把本地的远程分支删除然后再同步给远程</font>  
 * `git push origin [localBranch]:[remoteBranch]`  
-  将本地的localBranch分支和远端的remoteBranch关联(如果远端没有就创建),和git push -u不同的是 <font color="#00FF00">git push -u 远程分支名就等于本地分支名前面加上origin/</font>,而当前命令是让本地分支去关联远端任意名称的分支.比如git push origin dev:dev2就是让远程的dev2和本地的dev分支关联.
+  将本地的localBranch分支和远端的remoteBranch关联(如果远端没有就创建),和git push -u不同的是 <font color="#00FF00">git push -u [LocalBranch] 就等于创建一个本地的远程分支,该分支名为本地分支名前面加上origin/</font>,而当前命令是让本地分支去关联远端任意名称的分支.比如git push origin dev:dev2就是让远程的dev2和本地的dev分支关联.
 * `git push origin ["tags"]` 将本地的一个标签推送到远程
 * `git push origin --tags` 将本地所有的标签推送到远程
 * `git push origin :["tags"]` 删除远程标签
