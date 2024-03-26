@@ -99,7 +99,7 @@ B.SourceTree安装教程
   * -vv:查看本地分支的当前版本、当前commit、和远程分支关联的情况
   * -avv:查看本地分支+远程分支的当前版本、当前commit、和远程分支关联的情况
 * `git branch [branchName]` 创建分支
-* `git branch [newBranchName] [originBranchName/tagName]` 基于分支/标签创建分支,该方法可以基于一个分支或者标签去创建一个分支;所以仅从创建分支角度而言<font color="#00FF00">标签可以视作分支</font>
+* ~~`git branch [newBranchName] [originBranchName/tagName]` 基于分支/标签创建分支,该方法可以基于一个分支或者标签去创建一个分支;所以仅从创建分支角度而言<font color="#00FF00">标签可以视作分支</font>,方法被废弃,详情见`git switch`~~
 * `git branch [-d] [branchName]`  
   删除分支,不能删除当前分支,并且<font color="#00FF00">当前分支不能删除比自已版本高的分支</font>
 * `git branch [-D] [branchName]`  强制删除该分支(不建议使用)
@@ -109,6 +109,8 @@ B.SourceTree安装教程
 - - - 
 * `git switch [-c] [branchName]` 切换到`branchName`分支  
   * `-c`:如果不存在该分支就创建该分支
+* `git switch -c [localBranch] [originBranchName/tagName]` 基于分支/标签创建分支,该方法可以基于一个分支或者标签去创建一个分支;所以仅从创建分支角度而言<font color="#00FF00">标签可以视作分支</font>  
+  该方法同样可以基于远程分支创建一个本地分支,<font color="#00FF00">使用该方法创建的本地分支会默认关联远程分支</font>  
 - - - 
 * ~~`git checkout [-b] [branchName]`~~ 切换到一个分支  
   提示:checkout语义不明确,改用`git switch`  
@@ -218,14 +220,16 @@ B.SourceTree安装教程
 * `git remote set-head origin [remoteBranch]`
   设置远程HEAD指向某个分支;remoteBranch:远程分支的名称
 - - - 
-* `git push -u [remoteAddressName] [LocalBranch]`  
-  将本地的<font color="#FF00FF">一个</font>分支<font color="#00FF00">推送到远程</font>,并且将本地分支和远程分支关联.对于刚创建的项目要添加 -u (如果是基于HTTP需要输入账户密码,如果是SSH则不需要)上面说过origin就代表远程项目地址,所以这一步操作可以理解为关联远程分支,而远程项目地址一般都很长,不过通过git remote add操作后origin就指代远程项目地址.执行该命令时需要进入将要关联的本地分支,并且LocalBranch要和本地分支的名称一致.
+* `git push [-u] [remoteAddressName] [LocalBranch]`  
+  将本地的<font color="#FF00FF">一个</font>分支<font color="#00FF00">推送到远程的`remoteAddressName`仓库</font>执行该命令时需要进入将要关联的本地分支,并且LocalBranch要和本地分支的名称一致.  
+  *注意:如果远程已经有该分支了,<font color="#FF00FF">并且远程分支和本地分支不是同一个分支则会直接报错</font>,如果是同一个分支则会将本地分支与远程分支关联*
   * `remoteAddressName`:远程仓库的名称
-* `git push origin --delete origin`  
-  删除远程分支,该分支是和当前分支对应的分支.删除了之后就相当于本地有这个分支远程没有这个分支的情况,见22条  
+  * `-u`:如果远程没有该分支则需要该参数(即第一次推送需要该参数),<font color="#00FF00">添加该参数会使当前分支默认关联远程分支</font>,后续将本地分支推送到远程时就不需要使用该参数了
+* `git push [remoteAddressName] --delete [remoteBranch]` 删除远程分支,见22条  
   <font color="#00FF00">这条命令实际上就是把本地的远程分支删除然后再同步给远程</font>  
-* `git push origin [localBranch]:[remoteBranch]`  
-  将本地的localBranch分支和远端的remoteBranch关联(如果远端没有就创建),和git push -u不同的是 <font color="#00FF00">git push -u [LocalBranch] 就等于创建一个本地的远程分支,该分支名为本地分支名前面加上origin/</font>,而当前命令是让本地分支去关联远端任意名称的分支.比如git push origin dev:dev2就是让远程的dev2和本地的dev分支关联.
+  * `remoteBranch`:远程分支名称
+* `git push [remoteAddressName] [localBranch]:[remoteBranch]`  
+  将本地的localBranch分支推送到远程仓库`remoteAddressName`并命名远程分支名为<font color="#00FF00">remoteBranch</font>(如果远端没有就创建),和git push -u不同的是 <font color="#00FF00">git push -u [LocalBranch] 就等于创建一个本地的远程分支,该分支名为本地分支名前面加上origin/</font>,而当前命令是让本地分支去关联远端任意名称的分支.比如git push origin dev:dev2就是让远程的dev2和本地的dev分支关联.
 * `git push origin ["tags"]` 将本地的一个标签推送到远程
 * `git push origin --tags` 将本地所有的标签推送到远程
 * `git push origin :["tags"]` 删除远程标签
