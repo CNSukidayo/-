@@ -13,8 +13,10 @@ B.SourceTree安装教程
 ## 1.初始化相关命令
 * `git init` 初始化git项目
 - - - 
-* `git clone [remoteAddress]` 克隆远程仓库的代码
-* `git clone [addr] [projectName]` 将远程项目克隆到本地并且命名该项目的名称
+* `git clone [remoteAddress] [projectName]` 克隆远程仓库的代码
+  * `remoteAddress`(必填):远程仓库的地址
+    - - -
+  * `projectName`:将克隆的项目文件夹重命名为`projectName`,如果不填就使用仓库的默认名称
 * `git clone [addr] --recurisuc` 果克隆的项目依赖别的项目时使用该命令
 * `git clone --branch [tags] [addr]` 克隆指定Tag(标签)的项目到本地
 - - -
@@ -107,6 +109,8 @@ B.SourceTree安装教程
 * `git branch -m [oldBranchName] [newBranchName]`	重命名分支(一切分支m)
 * `git branch [branchName] [hash]`  
   游离状态下创建新分支,当进入游离状态时会提示一个hash值,我们就根据这个hash值去创建分支.
+* `git branch --set-upstream-to=[remoteAddressName/branchName] [localBranch]` 将本地分支和远程分支进行关联 
+  例如:`git branch --set-upstream-to=origin/master master` 将本地的master分支关联到远程的master分支
 - - - 
 * `git switch [-c] [branchName]` 切换到`branchName`分支  
   * `-c`:如果不存在该分支就创建该分支
@@ -214,7 +218,7 @@ B.SourceTree安装教程
   解除当前与`remoteAddressName`远程仓库的关联;见22条
 * `git remote show` 查看当前项目关联了哪些远程仓库(一个项目可以关联多个远程仓库,一般返回origin、upstream)
 * `git remote show origin`  
-  查看当前对应分支是否过期(相较于远程)以及显示远程仓库地址,以及本地分支与远程分支关联的情况
+  查看当前对应分支是否过期(相较于远程)、显示远程仓库地址、本地分支与远程分支关联的情况
 * `git remote prune origin --dry-run`  
   查看当前计算机不需要的远程分支(第1点说过一个分支就关联一个本地分支),有一种情况就是本地不需要远程分支,但是本地任然有用于感应远程分支的分支.
 * `git remote prune origin`  
@@ -350,7 +354,10 @@ B.SourceTree安装教程
     ![还原现场冲突流程](resources/git/9.png)  
 17. 标签和分支是没有关系的,标签不针对分支可以被任意分支看到.
 18. master分支一般很少改变,dev分支一般用来开发,test分支用来测试.master一般就是生产阶段了
-19. 当通过git checkout origin/master切换到远程分支时会处于一个游离状态.所以既然是处于游离状态,就不是真正意义上的切换分支,而是到达了远程分支的某个版本,即没有切换远程分支的说法,切换到远程分支就是进入游离状态.
+19. 当通过`git switch [remoteAddressName/branchName]`切换到远程分支时会处于一个<font color="#00FF00">游离状态</font>.所以既然是处于游离状态,就不是真正意义上的切换分支,而是到达了远程分支的某个版本,即没有切换远程分支的说法,切换到远程分支就是进入游离状态.
+  <font color="#00FF00">远程分支是只读分支</font>  
+  本地分支与远程分支交互图:  
+  ![本地分支与远程分支](resources/git/11.png)
 20. 如果项目是克隆下来的,则这个项目是不需要执行`git push -u origin [LocalBranch]`操作的.
 21. 假设A和B同时修改了同一行,A先commit并且push到远程.B再commit并且push到远程,由于修改了同一行必然产生冲突,所以B的这次push压根就不会成功,此时B就需要先pull,pull完了之后因为修改了同一行必然有冲突所以此时B就要去解决这个冲突,解决完后push(会有两次commit)
 22. 本地有的远程没有的分支,用`git push -u origin [branchName]`(或者`git push origin`) 在远程创建分支并和本地关联,远程有的本地没有的可以使用`git branch [newBranchName] [originBranchName/tagName]`命令来基于本地的远程分支创建本地分支或者看git pull [remoteBranch]:[localBranch]
