@@ -254,8 +254,10 @@ B.SourceTree安装教程
 
 ## 5.检查历史/状态相关命令
 * `git status` 查看Git本地仓库的状态
-* `git log [-graph]` 查看所有commit操作
-  更准确的说这条命令是<font color="#00FF00">查看当前HEAD指针指向的版本及该版本之前的commit信息</font>,至于采用这种说法就是为了描述<font color="#FF00FF">版本穿梭</font>和`git reflog`命令形成对比
+* `git log [branchName] [-graph] [--pretty=oneline] [--abbrev-commit]` 查看某个分支的所有commit操作
+  更准确的说这条命令是<font color="#00FF00">查看`branchName`分支当前HEAD指针指向的版本及该版本之前的commit信息</font>,至于采用这种说法就是为了描述<font color="#FF00FF">版本穿梭</font>和`git reflog`命令形成对比
+  * `branchName`:查看哪个分支,默认不填就是当前分支  
+    *提示:该命令同样可以查看远程分支的commit信息,例如查看origin/master分支*  
   * `-graph`:以图的形式显示所有提交记录
   * `--pretty=oneline`:只显示hash值和提交信息(这个选项会忽略很多信息)
   * `--abbrev-commit`:只显示提交hash值的前7位
@@ -416,15 +418,50 @@ B.SourceTree安装教程
 34. 工作区的回滚(各种意义上的)使用的都是`git restore`,而暂存区的回滚(各种意义上的)使用的都是`git restore --staged`  
 35. 版本回滚流程图
     ![版本回滚](resources/git/8.png)
-    HEAD可以有多份,<font color="#00FF00">一个HEAD就是一个阵营</font>,比如这里的HEAD1和HEAD2;git log命令本质只能看到<font color="#FF00FF">origin-head</font>所在阵营的提交记录,不能看别的阵营  
-    <font color="#FF00FF">origin-head只有一份</font>,当origin-head切换为某个阵营的<font color="#FFC800">最后一次提交</font>时,自动变成这个阵营  
-    当origin-head切换到当前阵营的历史版本并产生一个提交时会<font color="#00FF00">创建一个新的阵营</font>,<font color="#FFC800">这个阵营新的提交信息只能跟着origin-head这个老大走</font>  
+    HEAD可以有多份,<font color="#00FF00">一个HEAD就是一个阵营</font>,比如这里的HEAD1和HEAD2;git log命令本质只能看到<font color="#00FF00">HEAD</font>所在阵营的提交记录,不能看别的阵营  
+    <font color="#FF00FF">branchHead只有一份<font color="#00FFFF">(对应每个分支只有一个branchHead,在第39条中读取到的分支hash值就是branchHead对应的hash值,而不是HEAD的hash值)</font></font><font color="#00FF00">,当HEAd切换为某个阵营的</font><font color="#FFC800">最后一次提交</font>时,自动变成这个阵营  
+    当HEAD切换到当前阵营的历史版本并产生一个提交时会<font color="#00FF00">创建一个新的阵营</font>,<font color="#FFC800">这个阵营新的提交信息只能跟着HEAD这个老大走</font>  
+    可以使用`git checkout`命令使HEAD进入游离状态  
+    <font color="#ff9999">只有使用git reset才相当于将当前分支的指针定位到某次commit;git reset相当于回滚到任意版本,该操作比较危险</font>  
 36. 版本穿梭的本质是创建一个看不到的分支,并且该分支的名称就是目标版本的hash值,该分支的版本就是目标版本;
     在游离状态(版本穿梭后的状态就是游离状态)下<font color="#FFC800">如果对文件进行修改就必须要提交</font>,提交就会产生新的hash,因为版本穿梭是创建新的分支所以本次提交对源分支master是不可见的  
     <font color="#FF00FF">游离状态是创建分支的好时机,版本穿梭就是用于创建分支的</font>  
     如果想退出版本穿梭,只要执行`git switch`切换分支(例如master)即可  
     实际上版本穿梭并不是分支,<font color="#00FF00">游离的本意就是当前不处于任何分支</font>,这里只是便于理解;因为它并不具有分支的一些特征,比如分支重命名  
-
+37. 本地与远程冲突解决流程图
+    ![本地与远程冲突解决流程图](resources/git/12.png)  
+    和之前最大的区别在于之前是主动合并的分支的提交在后面,被动合并的分支的提交在前面;这里规定就是:<font color="#FF00FF">当远程分支和本地分支合并产生冲突时,远程分支的提交在后面,本地分支的提交在前面</font>再加一个解决冲突的提交  
+    <font color="#00FF00">远程分支的commit提交链一旦确定就不能随意穿插commit记录</font>  
+    此时当别的本地分支再合并的远程分支的时候,还是<font color="#FFC800">先找同源点,如果本地分支在同源点之后没有任何提交则触发fast-forward</font>  
+38. 本地和远程合并流程图  
+    <font color="#FF00FF">如果本地的本次push不能使远程分支产生fast-forward,但也不会产生冲突的情况下;分支合并成功后Git会自动额外创建一个commit</font>  
+    例如本地的master分支和远程master分支的第一个同源点是<font color="#FF00FF">origin-master</font>,此时本地master产生了一个提交<font color="#00FF00">commit-A</font>;远程的分支被别人push了也产生了一个提交称为<font color="#FFC800">commit-B</font>(并且这两个提交不冲突);此时本地分支push不会报错、不会冲突但也不会产生fast-forward(因为本地和远程找到最新的一个同源点后发现本地还有提交)  
+    此时Git的版本链为:<font color="#FF00FF">origin-master</font>-><font color="#FFC800">commit-B</font>-><font color="#00FF00">commit-A</font>-><font color="#FF0000">Merge branch 'master' of xxx</font>  
+    commit-B在后面是因为commit-B是先提交的(远程一旦确定不能改变),重要的是Git会自动生成一个新的提交就是这里的<font color="#FF0000">Merge branch 'master' of xxx</font>  
+    ![本地和远程合并流程图](resources/git/13.png)  
+39. 分支在Git中的存储方式
+    进入每个Git项目的.git文件夹,这里列举它的文件目录结构  
+    * git
+      * `COMMIT_EDITMSG`:存放<font color="#00FF00">当前分支</font>的<font color="#FF00FF">branchHead</font>指针指向的commit的提交信息
+        branchHead的概念可以见35条  
+      * `config`:存放当前项目的配置信息(项目级别的配置信息)  
+        即`git config --local`命令保存的信息
+      * `FETCH_HEAD`:存放当前分支对应的远程分支的commit信息(实际上就是当前分支对应的本地的远程分支的commit信息)  
+      * `HEAD`:当前HEAD对应的commit值是什么
+        该文件的内容一般是引用一个分支的HEAD,一种可能的值是:<font color="#00FF00">ref: refs/heads/master</font>
+      * `refs`:
+        * `stash`:存放保存现场栈顶的hash值文件  
+        在`git stash`命令中讲过,git保存现场是使用栈的结构存储的,所以该文件保存的是栈顶的hash值  
+        * `tags`:该文件夹下存放当前项目的所有tag标签(标签是不区分分支的)
+        * `heads`:存放所有分支的<font color="#FF00FF">branchHead</font>指针指向的hash值
+          * `dev`:存放dev分支的branchHead对应的hash值
+          * `master`:存放master分支的branchHead对应的hash值
+        * `remotes`:存放当前项目关联的所有远程项目
+          之前说过一个项目可以关联多个远程仓库,例如这里关联了两个远程仓库origin和upstream
+          * `origin`:自已fork的远程仓库
+            * `dev`:本地的远程分支dev(用它来感知远程origin仓库的dev分支)
+            * `master`:本地的远程分支master(用它来感知远程origin仓库的master分支)
+          * `upstream`:源仓库
 
 
 
