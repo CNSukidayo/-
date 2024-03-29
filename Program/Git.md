@@ -267,15 +267,17 @@ B.SourceTree安装教程
 ## 5.检查历史/状态相关命令
 * `git status` 查看Git本地仓库的状态
 * `git log [branchName] [-graph] [--pretty=oneline] [--abbrev-commit]` 查看某个分支的所有commit操作
-  更准确的说这条命令是<font color="#00FF00">查看`branchName`分支当前HEAD指针指向的版本及该版本之前的commit信息</font>,至于采用这种说法就是为了描述<font color="#FF00FF">版本穿梭</font>和`git reflog`命令形成对比
-  * `branchName`:查看哪个分支,默认不填就是当前分支  
+  更准确的说这条命令是<font color="#00FF00">查看`branchName`分支的<font color="#FF00FF">branchHead</font>指针指向的版本及该版本之前的commit信息</font>,至于采用这种说法就是为了描述<font color="#FF00FF">版本穿梭</font>和`git reflog`命令形成对比
+  * `branchName`:查看哪个分支  
+    如果不填,则默认查看的是当前分支的HEAD指针指向的版本及该版本之前的commit信息;注意HEAD指针和branchHead的区别,详情见第34条  
+    该命令实际上查看的是.git/logs文件夹下的内容,详情见第38条  
     *提示:该命令同样可以查看远程分支的commit信息,例如查看origin/master分支*  
   * `-graph`:以图的形式显示所有提交记录
   * `--pretty=oneline`:只显示hash值和提交信息(这个选项会忽略很多信息)
   * `--abbrev-commit`:只显示提交hash值的前7位
 * `git reflog` 查看所有操作记录
-* `git show ["tag"]` 查看标签的详细信息
-* `git blame [files]` 查看一个文件的每一行是谁写的
+* `git blame [file]` 追踪文件责任人,通过该命令可以看到某个文件的每一行是被谁写的被谁修改的,并且每一行都有一个hash值  
+  * `file`:具体要查看的文件
 - - - 
 * `git diff` 比较暂存区和工作区文件的差异(要知道diff命令的差别)
 * `git diff [hash]` 比较任意版本库和工作区的差异
@@ -295,9 +297,8 @@ B.SourceTree安装教程
 * `git config --global --unset [propertiesKey]` 重置全局配置
 - - -
 * `git version` 查看Git的版本  
-* `git blame [file]` 追踪文件责任人,通过该命令可以看到某个文件的每一行是被谁写的被谁修改的,并且每一行都有一个hash值  
-  * `file`:具体要查看的文件
-
+- - - 
+* `git gc` 压缩git的refs文件夹,详情见第38条  
 
 
 
@@ -474,6 +475,38 @@ B.SourceTree安装教程
             * `dev`:本地的远程分支dev(用它来感知远程origin仓库的dev分支)
             * `master`:本地的远程分支master(用它来感知远程origin仓库的master分支)
           * `upstream`:源仓库
+      * `packed-refs`:refs文件的压缩文件,执行`git gc`命令后将refs文件夹压缩后生成的压缩文件
+      * `objects`:该文件夹下存放所有的提交记录  
+        如果进入该文件夹可以看到很多类似下面的文件夹  
+        ![objects](resources/git/14.png)  
+        可以看到它这些由两位字符组成的文件夹,<font color="#00FF00">这些文件夹里面就存放了我们所有的提交记录</font>,<font color="#FF00FF">并且按照这些提交记录的前两个字母进行分组</font>,假设这里进入02文件夹下ls会发现有两个文件`9cc102614172dc47daaf9b960546c530be36f2`和`a33dfad0c1068de49b895436c0032ae6317ec5`;这两个文件就代表我们有两个提交记录(029cc102614172dc47daaf9b960546c530be36f2和02a33dfad0c1068de49b895436c0032ae6317ec5)  
+        * `pack`:这个文件夹内没有内容
+          当执行`git gc`命令时该文件夹下才会出现内容,并且上面这些所有提交记录文件夹都会消失,实际上是被压缩到pack文件夹内了,压缩之后会有三个文件  
+          * `pack-c0c49.idx`:二进制文件,索引文件
+          * `pack-c0c49.pack`:二进制文件,真正的压缩文件,该文件存放的就是提交文件的压缩内容,即所有的提交记录存放在该文件内
+          * `pack-c0c49.rev`:二进制文件,意义暂不明确
+        * `info`:
+          * `packs`:这个文件会存放objects/pack文件夹下所有的前缀内容
+            例如:
+            ```shell
+            P pack-c0c490e19fdd41df8afb37e50db26755984e5181.pack
+            P pack-c3eafb857617990ca5fc37d6fea0a9bb55c1771a.pack
+            ```
+            也就是说objects/pack文件夹下有多少个不同前缀的文件,这里就有多少行
+          * `commit-graph`:二进制文件,作用位置(从文件名推测可能是commit的图像化)
+      * `logs`:存放日志,所有commit的日志信息就存放在该文件夹下,即`git log`实际上读取的就是该文件夹下的内容  
+        * `HEAD`:当前分支HEAD指向的版本及该版本之前的commit信息  
+        * `refs`:存放所有分支对应的branchHEAD指向的版本及该版本之前的commit信息
+          * `heads`:本地分支
+            * `dev`:dev分支的commit信息
+            * `master`:master分支的commit信息
+          * `remotes`:本地的远程分支
+            * `origin`:origin远程仓库(一个本地仓库可以关联多个远程分支)
+              * `dev`:本地的远程分支(origin/dev)的commit信息
+            * `upstrem`:upstream远程仓库
+              * `master`:本地的远程分支(upstream/master)的commit信息
+          * `stash`:栈顶现场的信息
+
 
 
 
