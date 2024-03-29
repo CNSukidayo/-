@@ -235,23 +235,24 @@ B.SourceTree安装教程
   * `-u`:如果远程没有该分支则需要该参数(即第一次推送需要该参数),<font color="#00FF00">添加该参数会使当前分支默认关联远程分支</font>,后续将本地分支推送到远程时就不需要使用该参数了
   * `LocalBranch|tags`:分支/标签
     可以推送本地分支和标签,之前也说过标签可以视作分支  
-* `git push [remoteAddressName] --delete [remoteBranch|tags]` 删除远程分支或者远程的标签,见22条  
-  <font color="#00FF00">这条命令实际上就是把本地的远程分支删除然后再同步给远程</font>  
-  * `remoteBranch|tags`:远程分支名称/标签
 * `git push [remoteAddressName] [localBranch]:[remoteBranch]`  
   将本地的localBranch分支推送到远程仓库`remoteAddressName`的<font color="#00FF00">remoteBranch</font>(如果远端没有就创建),和git push -u不同的是 <font color="#00FF00">git push -u [LocalBranch] 实际上是当前命令的简写,因为它默认推送到远程仓库的同名分支</font>,而当前命令是推送本地分支到远程的任意分支.比如git push origin dev:dev2就是让将本地的dev推到远程origin仓库的dev2分支上(如果远端没有dev2就创建该分支)  
-  *提示:不建议使用该命令,语义不清晰,推荐使用`git push [-u] [remoteAddressName] [LocalBranch]`这一个命令就可以了*  
+  *提示:不建议使用该命令,语义不清晰,推荐使用`git push [-u] [remoteAddressName] [LocalBranch|tags]`这一个命令就可以了*  
   * `:[remoteBranch]`:推送到哪个远程分支,可以省略如果省略则表明将当前分支推送到远程关联的分支
-* `git push origin --tags` 将本地所有的标签推送到远程
+* `git push [remoteAddressName] --delete [remoteBranch|tags]` 删除远程分支或者远程的标签,见22条  
+  *提示:如果是删除远程标签,则别的项目通过git pull是无法感知到这次删除的,这点是无法避免的*  
+  <font color="#00FF00">这条命令实际上就是把本地的远程分支删除然后再同步给远程</font>  
+  * `remoteBranch|tags`:远程分支名称/标签
+* `git push [remoteAddressName] --tags` 将本地所有的标签推送到远程
 - - -
-* `git fetch origin [localBranch]`  
+* `git fetch [remoteAddressName] [localBranch]`  
   将远程所有的origin/分支拉取到本地(更新本地的origin/分支).(远程分支在本地保留一份用于感知远程分支),如果不加 origin [localBranch]默认就是当前分支  
-* `git fetch origin tag ["tags"]` 从远程拉取指定标签
+* `git fetch [remoteAddressName] tag ["tags"]` 从远程拉取指定标签(不常用)
 - - - 
 * `git pull [remoteAddressName] [remoteBranch]:[localBranch]`
   该命令是git fetch和git merge的组合,拉取远程仓库`remoteAddressName`的`remoteBranch`分支并合并到本地的`localBranch`分支(如果本地没有localBranch分支则创建该分支).  
   <font color="#FF00FF">注意当前命令不会自动将本地和远程的分支进行关联</font>,一般如果通过该命令创建了一个本地不存在的分支,则还需要使用`git branch --set-upstream-to`命令将本地分支关联远程分支  
-  *提示:如果下面的参数remoteBranch和localBranch都省略的话,<font color="#FF00FF">会拉取所有的远程分支和标签;并将本地和远程已经关联的分支进行merge操作</font>*  
+  *提示:如果下面的参数remoteBranch和localBranch都省略的话,<font color="#FF00FF">会拉取所有的远程分支和<font color="#FFC800">标签</font>;并将本地和远程已经关联的分支进行merge操作</font>,<font color="#00FF00">但因为标签没有merge的说法,所以git pull拉取标签的效果就等价于git fetch拉取标签</font>*  
   *提示:另外git pull和git push远程与本地的顺序正好是相反的,push是推所以是[localBranch]:[remoteBranch] 本地->远程 pull是拉所以是 [remoteBranch]:[localBranch] 远程->本地*  
   <font color="#00FF00">参数太多太烦了,记住拉取的时候永远只执行`git pull [remoteAddressName]`即可,剩下的交给Git</font>  
   * `remoteAddressName`:拉取哪个远程仓,如果当前项目只关联了一个远程仓库则可以省略,否则必须填写
