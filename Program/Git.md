@@ -236,7 +236,9 @@ B.SourceTree安装教程
   <font color="#00FF00">这条命令实际上就是把本地的远程分支删除然后再同步给远程</font>  
   * `remoteBranch`:远程分支名称
 * `git push [remoteAddressName] [localBranch]:[remoteBranch]`  
-  将本地的localBranch分支推送到远程仓库`remoteAddressName`并命名远程分支名为<font color="#00FF00">remoteBranch</font>(如果远端没有就创建),和git push -u不同的是 <font color="#00FF00">git push -u [LocalBranch] 就等于创建一个本地的远程分支,该分支名为本地分支名前面加上origin/</font>,而当前命令是让本地分支去关联远端任意名称的分支.比如git push origin dev:dev2就是让远程的dev2和本地的dev分支关联.
+  将本地的localBranch分支推送到远程仓库`remoteAddressName`的<font color="#00FF00">remoteBranch</font>(如果远端没有就创建),和git push -u不同的是 <font color="#00FF00">git push -u [LocalBranch] 实际上是当前命令的简写,因为它默认推送到远程仓库的同名分支</font>,而当前命令是推送本地分支到远程的任意分支.比如git push origin dev:dev2就是让将本地的dev推到远程origin仓库的dev2分支上(如果远端没有dev2就创建该分支)  
+  *提示:不建议使用该命令,语义不清晰,推荐使用`git push [-u] [remoteAddressName] [LocalBranch]`这一个命令就可以了*  
+  * `:[remoteBranch]`:推送到哪个远程分支,可以省略如果省略则表明将当前分支推送到远程关联的分支
 * `git push origin ["tags"]` 将本地的一个标签推送到远程
 * `git push origin --tags` 将本地所有的标签推送到远程
 * `git push origin :["tags"]` 删除远程标签
@@ -245,10 +247,17 @@ B.SourceTree安装教程
   将远程所有的origin/分支拉取到本地(更新本地的origin/分支).(远程分支在本地保留一份用于感知远程分支),如果不加 origin [localBranch]默认就是当前分支  
 * `git fetch origin tag ["tags"]` 从远程拉取指定标签
 - - - 
-* `git pull`
-  该命令是git fetch和git merge的组合,拉取远程仓库最新的版本并将远程的同名分支合并到本地分支.(第一条,每个远程分支都有与之对应的本地分支).这条命令也会拉取所有本地没有的标签.
-* `git pull [remoteBranch]:[localBranch]`  
-  该命令和`git checkout [-b] [branchName] [remoteBranch]`类似,都是将本地没有的远程有的分支关联到本地.区别在于和本地关联的时候本地分支的名称可以和远程分支的名称不一致.
+* `git pull [remoteAddressName] [remoteBranch]:[localBranch]`
+  该命令是git fetch和git merge的组合,拉取远程仓库`remoteAddressName`的`remoteBranch`分支并合并到本地的`localBranch`分支(如果本地没有localBranch分支则创建该分支).  
+  <font color="#FF00FF">注意当前命令不会自动将本地和远程的分支进行关联</font>,一般如果通过该命令创建了一个本地不存在的分支,则还需要使用`git branch --set-upstream-to`命令将本地分支关联远程分支  
+  *提示:如果下面的参数remoteBranch和localBranch都省略的话,<font color="#FF00FF">会拉取所有的远程分支和标签;并将本地和远程已经关联的分支进行merge操作</font>*  
+  <font color="#00FF00">参数太多太烦了,记住拉取的时候永远只执行`git pull [remoteAddressName]`即可,剩下的交给Git</font>  
+  * `remoteAddressName`:拉取哪个远程仓,如果当前项目只关联了一个远程仓库则可以省略,否则必须填写
+  * `remoteBranch:`:拉取哪个远程分支,注意<font color="#00FF00">remoteBranch:</font>是可以省略的,当省略时意味着将`localBranch`分支对应关联的远程分支拉取到本地
+  * `localBranch`:合并到本地的哪个localBranch分支
+
+
+
 
 
 
