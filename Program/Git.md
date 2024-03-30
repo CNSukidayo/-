@@ -12,12 +12,14 @@ B.SourceTree安装教程
 
 ## 1.初始化相关命令
 * `git init` 初始化git项目
+* `git init --bare` 创建Git裸库
+  Git裸库的意思是这个库没有工作区,既然没有工作区那这个仓库就不能修改;所以这种一般是只读的中转仓库,可以进行push和pull操作,一般远程仓库就是裸库(这个知识点不太重要)  
 - - - 
 * `git clone [remoteAddress] [projectName]` 克隆远程仓库的代码
   * `remoteAddress`(必填):远程仓库的地址
     - - -
   * `projectName`:将克隆的项目文件夹重命名为`projectName`,如果不填就使用仓库的默认名称
-* `git clone [addr] --recurisuc` 果克隆的项目依赖别的项目时使用该命令
+* `git clone [remoteAddress] --recurisuc` 如果A项目关联了B项目,则直接克隆A项目是没办法把关联的B项目克隆到本地的,所以使用该命令<font color="#00FF00">可以把remoteAddress项目及其关联的项目克隆到本地</font>  
 * `git clone --branch [tags] [addr]` 克隆指定Tag(标签)的项目到本地
 - - -
 * `git help` 获取git帮助
@@ -190,10 +192,25 @@ B.SourceTree安装教程
 * `git reabase --abort`  
   放弃本次git rebase操作(如果git rebase完后想后悔的话使用该命令)
 - - - 
-* `git submodule add [addr]`  
+* `git submodule add [remoteAddr]`  
+  * `remoteAddr`:关联的项目的<font color="#00FF00">远程仓库</font>地址
+
   将当前项目关联另外一个项目(此时当前项目就可以引用别人项目的内容)
-* `git submodule foreach git pull`  
-  更新当前项目所依赖的所有项目(如果依赖项目发生了改变),但是注意远程还是不会更新依赖项目的(要更新见25条)
+  现在有两个项目GitA和GitB,<font color="#00FF00">并且都将这两个项目推送到远程仓库了</font>;现在GitA项目有一个Main启动类,GitB项目有一个print函数,我希望GitA能使用GitB项目的print函数打印一句话  
+  在GitA项目下执行`git submodule add [remoteAddr]`,其中remoteAddr是GitB项目的远程地址  
+  执行完毕之后就会拉取GitB项目,现在GitA项目的结构变成如下内容  
+  ![GitA项目](resources/git/15.png)  
+  修改相关的pom文件,让GitA引用GitB中的模块,此时A模块便可以使用B模块中的代码了  
+  ![使用B模块的代码](resources/git/16.png)  
+  关联完成之后相当于是把B的项目拉了一份到A项目中,所以此时需要把拉取的内容添加到暂存区并commit提交,接着push到远程仓库  
+  此时再回到github查看GitA项目就能够看到在GitA项目中关联的GitB项目  
+  ![项目关联](resources/git/17.png)  
+  但是要注意,gitB后面还跟了一个<font color="#FF00FF">@77c03e5</font>这就代表当前A项目关联的B项目的最新版本是这个hash值,因为B项目也在实时更新A项目不可能实时感知到,所以这里<font color="#00FF00">点击项目跳转到的是gitB所在的远程仓库地址的77c03e5这次提交</font>  
+  如果要更新gitA项目关联的gitB项目的代码,就可以使用下面的`git submodule foreach git pull`命令  
+  *提示:如果一个项目关联了另外一个项目,则克隆当前项目的时候需要使用`git clone [remoteAddress] --recurisuc`命令*  
+  *提示:如果要删除关联项目,详情见第25条*  
+* `git submodule foreach git pull` 更新当前项目所依赖的所有(foreach)项目(如果依赖项目发生了改变)  
+  *注意:远程的当前项目是不会更新依赖项目的(要更新见24条)*  
 - - - 
 * `git subtree add -P [projectASName] [addrAS] [branch]`  
   将当前项目互相依赖另一个项目(互相依赖概念见27).
@@ -377,9 +394,9 @@ B.SourceTree安装教程
 21. 假设A和B同时修改了同一行,A先commit并且push到远程.B再commit并且push到远程,由于修改了同一行必然产生冲突,所以B的这次push压根就不会成功,此时B就需要先pull,pull完了之后因为修改了同一行必然有冲突所以此时B就要去解决这个冲突,解决完后push(会有两次commit)
 22. 本地有的远程没有的分支,用`git push -u origin [branchName]`(或者`git push origin`) 在远程创建分支并和本地关联,远程有的本地没有的可以使用`git branch [newBranchName] [originBranchName/tagName]`命令来基于本地的远程分支创建本地分支或者看git pull [remoteBranch]:[localBranch]
 23. 对于一个有关联的分支,实际上是有3条分支.第一条就是本地的分支,第二条就是远程的分支,第三条是本地的远程分支(用该分支来感应远程分支)
-24. 当我们通过git submodule关联另外一个项目时,假设另外一个项目的内容发生改变并且push了,但是原项目是感知不到这次提交的,所以我们必须进入到原项目的依赖项目然后通过git pull更新依赖项目,但是这次pull只是将本地的依赖项目更新了,远程的依赖还没有更新,此时在原项目执行 git add->git commit->git push才能让远程更新.
-25. 没有命令直接解除当前项目的关联项目,首先执行git restore --staged [file]将依赖项目的文件夹从缓存区删除,然后删除依赖项目文件夹.->git add ->git commit ->git push
-26. 25、26介绍的都是单向依赖,在这种依赖环境下原项目是不能直接修改依赖项目的远程内容的(当然本地的可以修改).而在互相依赖状态下当前项目修改完依赖项目后可以push到远程,远程就可以被改变.
+24. 当我们通过git submodule关联另外一个项目时,假设另外一个项目的内容发生改变并且push了,但是原项目是感知不到这次提交的,所以我们必须进入到原项目的依赖项目然后通过git pull更新依赖项目(或者在原项目使用`git submodule foreach git pull`命令),但是这次pull只是将本地的依赖项目更新了,原项目的远程依赖还没有更新,此时在<font color="#FF00FF">原项目</font>执行 git add->git commit->git push才能让远程更新.  
+25. 没有命令直接<font color="#00FF00">解除当前项目的关联项目</font>,要删除只有一种办法就是在<font color="#00FF00">当前项目直接删除关联项目然后推送到远程</font>->git add ->git commit ->git push  
+26. 24、25介绍的都是单向依赖,在这种依赖环境下原项目是不能直接修改依赖项目的远程内容的(当然本地的可以修改).而在互相依赖状态下当前项目修改完依赖项目后可以push到远程,远程就可以被改变.
 27. Git与SVN的区别:  
     SVN是<font color="#00FF00">集中式版本控制系统</font>,需要联网才能工作必须不停地与服务器进行同步.  
     而Git是<font color="#00FF00">分布式版本控制系统</font>,每个人的电脑都是一个<font color="#FFC800">完整</font>的版本库,工作的时候不需要联网,只要把修改的文件推送给对方即可.
