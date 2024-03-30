@@ -181,15 +181,25 @@ B.SourceTree安装教程
 * `git show ["tag"]` 查看标签的详细信息
 - - - 
 * `git cherry-pick [hash]`  
-  将otherBranch分支的<font color="#00FF00">一次提交</font>复制到当前分支(复制的时候不会复制hash值,相当于otherBranch的某次提交的所有操作再执行一次)分支必然都是来自同一节点,所以使用该命令的时候必须从otherBranch和当前节点分开的<font color="#00FF00">第一个commit开始复制</font>(否则会冲突).
+  *使用场景:发现当前开发的提交写错分支了,可以使用当前命令将提交到错误分支的commit复制另外一个分支上*  
+  将<font color="#00FF00">otherBranch分支</font>的<font color="#00FF00">hash对应的这次提交</font><font color="#FF00FF">复制</font>到当前分支(复制的时候不会复制hash值,相当于将其<font color="#00FF00">otherBranch分支</font>的某次提交(`hash`)的所有操作再执行一次,因为是复制所以不会删除otherBranch分支的hash节点)分支必然都是来自同一节点,所以使用该命令的时候必须从<font color="#00FF00">otherBranch分支</font>和当前节点分开的<font color="#00FF00">第一个commit开始复制</font>(否则会直接报错).  
+  *提示:如果要将dev分支的commit复制到master,需要先切换到master,并且cherry-pick只能一次复制一个提交*  
 - - - 
-* `git rebase [branch]`  
-  将当前分支和branch断开后的所有commit复制到branch.该命令的作用和git cherry-pick类似,只不过当前命令是一次性将两个分支分叉后的<font color="#00FF00">所有commit全部复制一份</font>,另外注意是复制到,所以你要先切换到被复制的那个分支.(复制的时候不会复制hash值),并且该命令只在本机操作不要推送GitHub、branch(想要复制的分支)不能是master(因为master总是要提交到远程)
-* `git reabase --continue`  
-  使用git rebase复制的时候同样会产生冲突(有点像merge的冲突,但是这里不能和merge混淆了!!!merge是一次操作而reabase是复制分叉后所有的commit),当解决完冲突后git add -> git reabse --continue
-* `git reabase --skip`  
-  当使用git rebase产生冲突时,不使用当前分支的内容,而是使用branch(想要复制的分支)的内容.(注意commit是一次一次执行的,当每次commit冲突时都会让你去解决冲突,所以你可能需要多次 --skip或者--continue)当前命令实际上是放弃本次commit(因为需要执行多次commit嘛.放弃后Git log就看不到这次commit的日志了,因为已经放弃了)
-* `git reabase --abort`  
+* `git rebase [branch]` 变基操作  
+  将当前分支和`branch`最后一个<font color="#FF00FF">同源点</font>之后的所有commit复制到当前分支.该命令的作用和git cherry-pick类似,只不过当前命令是一次性将同源点之后的<font color="#00FF00">所有commit一次性复制</font>;<font color="#FF00FF">变基与合并非常相似,区别仅仅是合并/解决冲突时的commit链顺序不一样</font>  
+  假设分支A和分支B的同源点是commit-origin,接着分支A提交了一行commit-A,分支B也提交了同一行commit-B,此时在分支A中执行`git rebase B`把分支B的内容变基(复制到分支A),此时会产生冲突,解决冲突的提交记录为origin-rebase;之后查看提交记录  
+  commit-origin -> commit-B -> origin-rebase  
+  这和分支冲突就非常不一样,可以看到原本这里commit-A的提交记录没有了,所以它的规则如下:  
+  <font color="#FF00FF">commit-origin->目标分支的所有commit->解决冲突的commit</font>  
+  如果这里没有产生冲突(也没有fast-forward)则最终的提交链应该是:commit-origin -> commit-B -> commit-A  
+  可以发现它的顺序和merge正好相反,<font color="#00FF00">变基就是找到当前分支和目标分支的最后一个<font color="#FF00FF">同源点</font>,将目标分支同源点之后的commit<font color="#FF00FF">插入</font>到当前分支的同源点之后,如果有冲突则当前分支原本同源点之后的commit变为冲突解决的commit</font>  
+  *使用场景:在merge和rebase混用的场景,假设在dev分支执行变基master,如果有冲突解决完成之后,最终dev分支一定是领先或者与master处于同一个节点;<font color="#FF00FF">最重要的是此时进入master合并dev一定是fast-forward,因为master在同源点之后一定是没有提交的</font>*  
+  并且该命令只在本机操作不要推送GitHub、branch(想要复制的分支)不能是master
+* `git rebase --continue`  
+  使用git rebase复制的时候同样会产生冲突(有点像merge的冲突),当解决完冲突后git add -> git commit -> git reabse --continue  
+* `git rebase --skip`  
+  当使用git rebase产生冲突时,不使用当前分支的内容,而是使用`branch`(想要复制的分支)的内容.(注意commit是一次一次执行的,当每次commit冲突时都会让你去解决冲突,所以你可能需要多次 --skip或者--continue)当前命令实际上是放弃当前分支的本次commit(因为需要执行多次commit嘛.放弃后Git log就看不到这次commit的日志了,因为已经放弃了)
+* `git rebase --abort`  
   放弃本次git rebase操作(如果git rebase完后想后悔的话使用该命令)
 - - - 
 * `git submodule add [remoteAddr]`  
@@ -453,7 +463,7 @@ B.SourceTree安装教程
     <font color="#FF00FF">branchHead只有一份<font color="#00FFFF">(对应每个分支只有一个branchHead,在第39条中读取到的分支hash值就是branchHead对应的hash值,而不是HEAD的hash值)</font></font><font color="#00FF00">,当HEAd切换为某个阵营的</font><font color="#FFC800">最后一次提交</font>时,自动变成这个阵营  
     当HEAD切换到当前阵营的历史版本并产生一个提交时会<font color="#00FF00">创建一个新的阵营</font>,<font color="#FFC800">这个阵营新的提交信息只能跟着HEAD这个老大走</font>  
     可以使用`git checkout`命令使HEAD进入游离状态  
-    <font color="#ff9999">只有使用git reset才相当于将当前分支的指针定位到某次commit;git reset相当于回滚到任意版本,该操作比较危险</font>  
+    <font color="#ff9999">只有使用git reset才相当于将当前分支的指针定位到某次commit;git reset相当于回滚到任意版本,该操作比较危险;个人不推荐使用git reset命令</font>  
 16. 版本穿梭的本质是创建一个看不到的分支,并且该分支的名称就是目标版本的hash值,该分支的版本就是目标版本;
     在游离状态(版本穿梭后的状态就是游离状态)下<font color="#FFC800">如果对文件进行修改就必须要提交</font>,提交就会产生新的hash,因为版本穿梭是创建新的分支所以本次提交对源分支master是不可见的  
     <font color="#FF00FF">游离状态是创建分支的好时机,版本穿梭就是用于创建分支的</font>  
