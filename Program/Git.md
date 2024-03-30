@@ -404,17 +404,17 @@ C.GitLab安装教程
   <font color="#00FF00">远程分支是只读分支</font>  
   本地分支与远程分支交互图:  
   ![本地分支与远程分支](resources/git/11.png)
-1.  如果项目是克隆下来的,则这个项目是不需要执行`git push -u origin [LocalBranch]`操作的.
-2.  假设A和B同时修改了同一行,A先commit并且push到远程.B再commit并且push到远程,由于修改了同一行必然产生冲突,所以B的这次push压根就不会成功,此时B就需要先pull,pull完了之后因为修改了同一行必然有冲突所以此时B就要去解决这个冲突,解决完后push(会有两次commit)
-3.  本地有的远程没有的分支,用`git push -u origin [branchName]`(或者`git push origin`) 在远程创建分支并和本地关联,远程有的本地没有的可以使用`git branch [newBranchName] [originBranchName/tagName]`命令来基于本地的远程分支创建本地分支或者看git pull [remoteBranch]:[localBranch]
-4.  对于一个有关联的分支,实际上是有3条分支.第一条就是本地的分支,第二条就是远程的分支,第三条是本地的远程分支(用该分支来感应远程分支)
-5.  当我们通过git submodule关联另外一个项目时,假设另外一个项目的内容发生改变并且push了,但是原项目是感知不到这次提交的,所以我们必须进入到原项目的依赖项目然后通过git pull更新依赖项目(或者在原项目使用`git submodule foreach git pull`命令),但是这次pull只是将本地的依赖项目更新了,原项目的远程依赖还没有更新,此时在<font color="#FF00FF">原项目</font>执行 git add->git commit->git push才能让远程更新.  
-6.  没有命令直接<font color="#00FF00">解除当前项目的关联项目</font>,要删除只有一种办法就是在<font color="#00FF00">当前项目直接删除关联项目然后推送到远程</font>->git add ->git commit ->git push  
-7.  24、25介绍的都是单向依赖,在这种依赖环境下原项目是不能直接修改依赖项目的远程内容的(当然本地的可以修改)也即原项目只能单向看依赖项目,不能修改.<font color="#00FF00">而在互相依赖状态下当前项目修改完依赖项目后可以push到远程,远程的依赖项目就可以被改变</font>.
-8.  Git与SVN的区别:  
+20. 如果项目是克隆下来的,则这个项目是不需要执行`git push -u origin [LocalBranch]`操作的.
+21. 假设A和B同时修改了同一行,A先commit并且push到远程.B再commit并且push到远程,由于修改了同一行必然产生冲突,所以B的这次push压根就不会成功,此时B就需要先pull,pull完了之后因为修改了同一行必然有冲突所以此时B就要去解决这个冲突,解决完后push(会有两次commit)
+22. 本地有的远程没有的分支,用`git push -u origin [branchName]`(或者`git push origin`) 在远程创建分支并和本地关联,远程有的本地没有的可以使用`git branch [newBranchName] [originBranchName/tagName]`命令来基于本地的远程分支创建本地分支或者看git pull [remoteBranch]:[localBranch]
+23. 对于一个有关联的分支,实际上是有3条分支.第一条就是本地的分支,第二条就是远程的分支,第三条是本地的远程分支(用该分支来感应远程分支)
+24. 当我们通过git submodule关联另外一个项目时,假设另外一个项目的内容发生改变并且push了,但是原项目是感知不到这次提交的,所以我们必须进入到原项目的依赖项目然后通过git pull更新依赖项目(或者在原项目使用`git submodule foreach git pull`命令),但是这次pull只是将本地的依赖项目更新了,原项目的远程依赖还没有更新,此时在<font color="#FF00FF">原项目</font>执行 git add->git commit->git push才能让远程更新.  
+25. 没有命令直接<font color="#00FF00">解除当前项目的关联项目</font>,要删除只有一种办法就是在<font color="#00FF00">当前项目直接删除关联项目然后推送到远程</font>->git add ->git commit ->git push  
+26. 24、25介绍的都是单向依赖,在这种依赖环境下原项目是不能直接修改依赖项目的远程内容的(当然本地的可以修改)也即原项目只能单向看依赖项目,不能修改.<font color="#00FF00">而在互相依赖状态下当前项目修改完依赖项目后可以push到远程,远程的依赖项目就可以被改变</font>.
+27. Git与SVN的区别:  
     SVN是<font color="#00FF00">集中式版本控制系统</font>,需要联网才能工作必须不停地与服务器进行同步.  
     而Git是<font color="#00FF00">分布式版本控制系统</font>,每个人的电脑都是一个<font color="#FFC800">完整</font>的版本库,工作的时候不需要联网,只要把修改的文件推送给对方即可.
-9.  <font color="#FFC800">.gitignore</font>指定跟踪规则,主要看/在前面还是在后面  
+28. <font color="#FFC800">.gitignore</font>指定跟踪规则,主要看/在前面还是在后面  
     *提示:如果一个文件夹里面没有任何内容则该文件夹默认被屏蔽,而且这个<font color="#00FF00">文件夹无法被添加到暂存区</font>*  
     <font color="#00FF00">temp</font>:取消跟踪当前项目下temp文件及所有temp目录,假设现在项目路径结构如下:  
     > .gitignore  
@@ -447,42 +447,42 @@ C.GitLab安装教程
     > > a.txt  
     > 
     > temp <font color="#00FF00"># 如果这里temp是文件的话它也会被屏蔽</font>  
-10. Git的当前分支不能删除比自已版本高的分支
+29. Git的当前分支不能删除比自已版本高的分支
     ![不能删除高版本](resources/git/4.png)  
-11. fast-forward流程  
+30. fast-forward流程  
     ![fast-forward](resources/git/5.png)  
     假设分支A处于commit-A在此状态下创建了分支B,接着分支B提交了两次来到了<font color="#FFC800">commit-C</font>状态,此时将分支B合并到分支A,找到分支A和分支B的第一个<font color="#00FF00">同源点(这里是commit-A)</font>,由于分支A在此之后没有任何commit,所以会直接把分支A的<font color="#FF00FF">指针</font>指向<font color="#FFC800">commit-C</font>这次提交  
     <font color="#00FF00">fast-forward最终会归为一点</font>,例如上图中的hash4  
-12. 禁止fast-forward
+31. 禁止fast-forward
     ![no-fast-forward](resources/git/6.png)  
     此时将dev的两个commit合并到master之后,master还会再创建一个commit,即图中的hash5  
-13. 冲突解决流程图  
+32. 冲突解决流程图  
     ![解决冲突](resources/git/7.png)  
-14. 工作区的回滚(各种意义上的)使用的都是`git restore`,而暂存区的回滚(各种意义上的)使用的都是`git restore --staged`  
-15. 版本回滚流程图
+33. 工作区的回滚(各种意义上的)使用的都是`git restore`,而暂存区的回滚(各种意义上的)使用的都是`git restore --staged`  
+34. 版本回滚流程图
     ![版本回滚](resources/git/8.png)
     HEAD可以有多份,<font color="#00FF00">一个HEAD就是一个阵营</font>,比如这里的HEAD1和HEAD2;git log命令本质只能看到<font color="#00FF00">HEAD</font>所在阵营的提交记录,不能看别的阵营  
     <font color="#FF00FF">branchHead只有一份<font color="#00FFFF">(对应每个分支只有一个branchHead,在第39条中读取到的分支hash值就是branchHead对应的hash值,而不是HEAD的hash值)</font></font><font color="#00FF00">,当HEAd切换为某个阵营的</font><font color="#FFC800">最后一次提交</font>时,自动变成这个阵营  
     当HEAD切换到当前阵营的历史版本并产生一个提交时会<font color="#00FF00">创建一个新的阵营</font>,<font color="#FFC800">这个阵营新的提交信息只能跟着HEAD这个老大走</font>  
     可以使用`git checkout`命令使HEAD进入游离状态  
     <font color="#ff9999">只有使用git reset才相当于将当前分支的指针定位到某次commit;git reset相当于回滚到任意版本,该操作比较危险;个人不推荐使用git reset命令</font>  
-16. 版本穿梭的本质是创建一个看不到的分支,并且该分支的名称就是目标版本的hash值,该分支的版本就是目标版本;
+35. 版本穿梭的本质是创建一个看不到的分支,并且该分支的名称就是目标版本的hash值,该分支的版本就是目标版本;
     在游离状态(版本穿梭后的状态就是游离状态)下<font color="#FFC800">如果对文件进行修改就必须要提交</font>,提交就会产生新的hash,因为版本穿梭是创建新的分支所以本次提交对源分支master是不可见的  
     <font color="#FF00FF">游离状态是创建分支的好时机,版本穿梭就是用于创建分支的</font>  
     如果想退出版本穿梭,只要执行`git switch`切换分支(例如master)即可  
     实际上版本穿梭并不是分支,<font color="#00FF00">游离的本意就是当前不处于任何分支</font>,这里只是便于理解;因为它并不具有分支的一些特征,比如分支重命名  
-17. 本地与远程冲突解决流程图
+36. 本地与远程冲突解决流程图
     ![本地与远程冲突解决流程图](resources/git/12.png)  
     和之前最大的区别在于之前是主动合并的分支的提交在后面,被动合并的分支的提交在前面;这里规定就是:<font color="#FF00FF">当远程分支和本地分支合并产生冲突时,远程分支的提交在后面,本地分支的提交在前面</font>再加一个解决冲突的提交  
     <font color="#00FF00">远程分支的commit提交链一旦确定就不能随意穿插commit记录</font>  
     此时当别的本地分支再合并的远程分支的时候,还是<font color="#FFC800">先找同源点,如果本地分支在同源点之后没有任何提交则触发fast-forward</font>  
-18. 本地和远程合并流程图  
+37. 本地和远程合并流程图  
     <font color="#FF00FF">如果本地的本次push不能使远程分支产生fast-forward,但也不会产生冲突的情况下;分支合并成功后Git会自动额外创建一个commit</font>  
     例如本地的master分支和远程master分支的第一个同源点是<font color="#FF00FF">origin-master</font>,此时本地master产生了一个提交<font color="#00FF00">commit-A</font>;远程的分支被别人push了也产生了一个提交称为<font color="#FFC800">commit-B</font>(并且这两个提交不冲突);此时本地分支push不会报错、不会冲突但也不会产生fast-forward(因为本地和远程找到最新的一个同源点后发现本地还有提交)  
     此时Git的版本链为:<font color="#FF00FF">origin-master</font>-><font color="#FFC800">commit-B</font>-><font color="#00FF00">commit-A</font>-><font color="#FF0000">Merge branch 'master' of xxx</font>  
     commit-B在后面是因为commit-B是先提交的(远程一旦确定不能改变),重要的是Git会自动生成一个新的提交就是这里的<font color="#FF0000">Merge branch 'master' of xxx</font>  
     ![本地和远程合并流程图](resources/git/13.png)  
-19. 分支在Git中的存储方式
+38. 分支在Git中的存储方式
     进入每个Git项目的.git文件夹,这里列举它的文件目录结构  
     * git
       * `COMMIT_EDITMSG`:存放<font color="#00FF00">当前分支</font>的<font color="#FF00FF">branchHead</font>指针指向的commit的提交信息
@@ -537,7 +537,8 @@ C.GitLab安装教程
             * `upstrem`:upstream远程仓库
               * `master`:本地的远程分支(upstream/master)的commit信息
           * `stash`:栈顶现场的信息
-
+39. 工作区、暂存区、对象区状态流转图  
+    ![流转图](resources/git/18.png)  
 
 
 
