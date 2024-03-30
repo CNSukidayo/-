@@ -8,6 +8,7 @@
 **附录:**  
 A.Git常用技巧  
 B.SourceTree安装教程  
+C.GitLab安装教程  
 
 
 ## 1.初始化相关命令
@@ -344,6 +345,7 @@ B.SourceTree安装教程
 ## 附录:  
 A.Git常用技巧
 B.SourceTree安装教程  
+C.GitLab安装教程  
 
 
 ### A.Git常用技巧
@@ -555,4 +557,8 @@ B.SourceTree安装教程
 
 4.点击下一步即可  
 注意SourceTree默认会安装到系统盘,所以可以通过mklink来链接到D盘  
+
+### C.GitLab安装教程  
+
+
 
