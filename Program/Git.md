@@ -212,18 +212,20 @@ B.SourceTree安装教程
 * `git submodule foreach git pull` 更新当前项目所依赖的所有(foreach)项目(如果依赖项目发生了改变)  
   *注意:远程的当前项目是不会更新依赖项目的(要更新见24条)*  
 - - - 
-* `git subtree add -P [projectASName] [addrAS] [branch]`  
-  将当前项目互相依赖另一个项目(互相依赖概念见27).
+* `git subtree add -P [projectASName] [remoteAddressName] [branch]`  
+  将当前项目互相依赖另一个项目(互相依赖概念见26条);互相依赖不是说项目A依赖B,项目B也依赖A,不是这个概念;<font color="#00FF00">而是项目A依赖B,可以直接在项目A中修改项目B的内容并推送到远程</font>  
   * `projectASName`:给依赖的项目起的别名 
   * `branch`:依赖的项目的分支(也就是说通过这种方式依赖只能是依赖目标项目的一个分支,只能拿到这个分支的内容) 
-  * `addr`:这个地方并不是目标项目的远程地址,还记得之前说过由于远程项目的地址一般很长,可以使用git remote add origin [addr]指代一个远程项目的地址,所以这里需要先调用git remote add origin [addr]命令用一个origin指代远程的依赖项目的地址.  
-  另外你可以创建多个依赖,这些依赖都指向同一个addrAS(项目),然后起不同的依赖别名也可以.
-* `git subtree pull -P [projectASName] [addrAS] [branch]`  
-  更新本地的依赖项目,更新的时候这些projectASName、addrAS、branch都要和上面一条命令指定的一样.(假设现在依赖项目发生更新,同样我们的原项目的本地和远程都无法感知到这次更新.另外该命令只能更新本地,如果要更新远程则类比第25条)
-* `git subtree push -P [projectASName] [addrAS] [branch]`  
-  如果是依赖项目更新基本上都没什么问题,27条说过原项目是可以更新依赖项目的,假设现在原项目更新直接Git push只是更新原项目的远程仓库,使用git subtree push -P [projectASName] [addrAS] [branch]更新依赖项目的远程仓库.
-* `git subtree add -P [projectASName] [addrAS] [branch] --squash`  
-  这条命令就不讲了,主要是自已要知道git subtree有些时候会产生冲突(面试的时候就说:要么所有git subtree的命令最后全加--squash,要么全不加否则容易产生冲突)
+  * `remoteAddressName`:这个地方并不是目标项目的远程地址,而是远程仓库的名称,还记得之前说过由于远程项目的地址一般很长,可以使用`git remote add [remoteAddressName] [remoteAddr]`指代一个远程项目的地址,所以这里需要先调用`git remote add subtree-origin [remoteAddr]`命令用一个subtree-origin指代远程的依赖项目的地址;<font color="#00FF00">一个本地仓库可以关联多个远程仓库</font>  
+  另外你可以创建多个依赖,这些依赖都指向同一个remoteAddressName(远程仓库),然后起不同的依赖别名也可以.
+* `git subtree pull -P [projectASName] [remoteAddressName] [branch]`  
+  更新本地的依赖项目,更新的时候这些projectASName、remoteAddressName、branch都要和上面一条命令指定的一样.(假设现在依赖项目发生更新,同样我们的原项目的本地和远程都无法感知到这次更新.另外该命令<font color="#FF00FF">只能更新本地</font>,如果要更新远程则类比第24条,直接git push,但这里需要和`git subtree push`命令区别下来,因为git push是把本地项目推到远程而`git subtree push`是把本地项目的关联项目推到远程的关联项目)  
+* `git subtree push -P [projectASName] [remoteAddressName] [branch]`  
+  如果是依赖项目更新基本上都没什么问题,26条说过原项目是可以更新依赖项目的,假设现在原项目更新直接Git push<font color="#FF00FF">只是更新原项目的远程仓库</font>,使用当前命令可以更新依赖项目的远程仓库.
+  所以要在原项目更新关联项目的内容时,首先要git push更新原项目的远程仓库,再git subtree push更新关联仓库的远程仓库,<font color="#00FF00">要push两次</font>  
+  即使是使用subtree,原项目的远程仓库也是不能感知关联项目的,所以<font color="#FF00FF">subtree仅仅是说原项目可以更新关联项目而已</font>  
+* `git subtree add -P [projectASName] [remoteAddressName] [branch] --squash` *这条命令的主要就是减少git log中产生的提交数,比如父工程有3次提交,子工程有5次提交,调用git log的时候就会显得非常混乱,于是乎使用当前这条命令,<font color="#FF00FF">子工程就可以把多次提交合并为一个新的提交,从而减少commit次数看得更加清爽</font>*  
+  为了便于理解和记忆,一切从简,主要是自已要知道<font color="#FFC800">git subtree有些时候会产生冲突</font>(面试的时候就说:<font color="#00FF00">要么所有git subtree类型的命令最后全加--squash,要么全不加否则容易产生冲突</font>,并且加了--squash会非常容易产生冲突)
 
 
 
@@ -367,15 +369,15 @@ B.SourceTree安装教程
    此时将分支B合并到分支A会产生冲突,<font color="#FF00FF">产生冲突就要解决冲突</font>;当冲突解决完毕之后冲突本身会形成一次提交,所以最后分支A的提交记录就应该是<font color="#FFC800">origin-commit->commit-A-1->commit-B-1->commit-B-2->fix CONFLICT</font>  
    *提示:如果分支B和分支A没有修改同一行,但也构不成fast-forward的话,则分支B(被合并的分支)的提交会放到分支A最后一次提交的后面,即:*  
    <font color="#FF00FF">commit-origin->主动合并的分支的所有commit->目标分支的所有commit</font>  
-   另外冲突产生的原因还有不规范(比如git cherry-pick [hash]命令跨节点复制)、分支不是同一祖先.
-
+   另外冲突产生的原因还有不规范(比如git cherry-pick [hash]命令跨节点复制)、分支不是同一祖先  
+   对于分支不是同一祖先的场景,这种场景还是比较少见的,一般来说两条分支最终都能找到一个<font color="#FF00FF">同源点</font>,而找不到同源点的情况一般发生在关联项目subtree的场景中  
 9. 远端分支的更改本地是感知不到的
-10.  pull request和Fork,Fork完项目后我们在Fork的项目的dev分支中修改代码后在主页点击Compare&pull request,然后填入当前修改的提交信息 然后点击create pull request.然后仓库的拥有者就会审查你的代码进行合并操作.
-11.  如果想忽略某些文件,在.git同级目录下创建.gitignore,然后在该文件中填入你需要屏蔽的文件,另外文件的目录也是支持通配符的.
-12.  建议(规范):在功能没有开发完之前不要commit
-13.  规定(必须):在没有开发完毕之前(commit)不能checkout(切换分支),<font color="#00FF00">如果硬要切换分支可以保存现场</font>
-14.  在游离状态下,如果对过去的版本进行了修改并且提交了,那么过去版本的后面的版本是不会感知到这次修改的,只有通过新建分支然后合并来达到修改的目的.
-15.  保存现场的前提是要添加到暂存区中,<font color="#00FF00">如果一个文件只存在于工作区那么这个文件是属于任何一个分支的</font>(不然怎么让你切换分支前要commit呢?)
+10. pull request和Fork,Fork完项目后我们在Fork的项目的dev分支中修改代码后在主页点击Compare&pull request,然后填入当前修改的提交信息 然后点击create pull request.然后仓库的拥有者就会审查你的代码进行合并操作.
+11. 如果想忽略某些文件,在.git同级目录下创建.gitignore,然后在该文件中填入你需要屏蔽的文件,另外文件的目录也是支持通配符的.
+12. 建议(规范):在功能没有开发完之前不要commit
+13. 规定(必须):在没有开发完毕之前(commit)不能checkout(切换分支),<font color="#00FF00">如果硬要切换分支可以保存现场</font>
+14. 在游离状态下,如果对过去的版本进行了修改并且提交了,那么过去版本的后面的版本是不会感知到这次修改的,只有通过新建分支然后合并来达到修改的目的.
+15. 保存现场的前提是要添加到暂存区中,<font color="#00FF00">如果一个文件只存在于工作区那么这个文件是属于任何一个分支的</font>(不然怎么让你切换分支前要commit呢?)
     <font color="#FF00FF">切换分支之前暂存区不能有内容,否则会直接报错</font>*(除非这两个分支处于同一个commit版本,但需要记住暂存区有内容就不要切换分支)*  
     <font color="#FF00FF">切换分支前,如果工作区有未跟踪的文件,并且该文件存在于目标分支,则会直接报错;</font>  
 16. * <font color="#00FF00">还原现场的时候如果工作区新建了一个文件(<font color="#FF00FF">未跟踪</font>)并且该文件已经存在于现场中,则本次还原会直接报错</font>  
@@ -390,17 +392,17 @@ B.SourceTree安装教程
   <font color="#00FF00">远程分支是只读分支</font>  
   本地分支与远程分支交互图:  
   ![本地分支与远程分支](resources/git/11.png)
-20. 如果项目是克隆下来的,则这个项目是不需要执行`git push -u origin [LocalBranch]`操作的.
-21. 假设A和B同时修改了同一行,A先commit并且push到远程.B再commit并且push到远程,由于修改了同一行必然产生冲突,所以B的这次push压根就不会成功,此时B就需要先pull,pull完了之后因为修改了同一行必然有冲突所以此时B就要去解决这个冲突,解决完后push(会有两次commit)
-22. 本地有的远程没有的分支,用`git push -u origin [branchName]`(或者`git push origin`) 在远程创建分支并和本地关联,远程有的本地没有的可以使用`git branch [newBranchName] [originBranchName/tagName]`命令来基于本地的远程分支创建本地分支或者看git pull [remoteBranch]:[localBranch]
-23. 对于一个有关联的分支,实际上是有3条分支.第一条就是本地的分支,第二条就是远程的分支,第三条是本地的远程分支(用该分支来感应远程分支)
-24. 当我们通过git submodule关联另外一个项目时,假设另外一个项目的内容发生改变并且push了,但是原项目是感知不到这次提交的,所以我们必须进入到原项目的依赖项目然后通过git pull更新依赖项目(或者在原项目使用`git submodule foreach git pull`命令),但是这次pull只是将本地的依赖项目更新了,原项目的远程依赖还没有更新,此时在<font color="#FF00FF">原项目</font>执行 git add->git commit->git push才能让远程更新.  
-25. 没有命令直接<font color="#00FF00">解除当前项目的关联项目</font>,要删除只有一种办法就是在<font color="#00FF00">当前项目直接删除关联项目然后推送到远程</font>->git add ->git commit ->git push  
-26. 24、25介绍的都是单向依赖,在这种依赖环境下原项目是不能直接修改依赖项目的远程内容的(当然本地的可以修改).而在互相依赖状态下当前项目修改完依赖项目后可以push到远程,远程就可以被改变.
-27. Git与SVN的区别:  
+1.  如果项目是克隆下来的,则这个项目是不需要执行`git push -u origin [LocalBranch]`操作的.
+2.  假设A和B同时修改了同一行,A先commit并且push到远程.B再commit并且push到远程,由于修改了同一行必然产生冲突,所以B的这次push压根就不会成功,此时B就需要先pull,pull完了之后因为修改了同一行必然有冲突所以此时B就要去解决这个冲突,解决完后push(会有两次commit)
+3.  本地有的远程没有的分支,用`git push -u origin [branchName]`(或者`git push origin`) 在远程创建分支并和本地关联,远程有的本地没有的可以使用`git branch [newBranchName] [originBranchName/tagName]`命令来基于本地的远程分支创建本地分支或者看git pull [remoteBranch]:[localBranch]
+4.  对于一个有关联的分支,实际上是有3条分支.第一条就是本地的分支,第二条就是远程的分支,第三条是本地的远程分支(用该分支来感应远程分支)
+5.  当我们通过git submodule关联另外一个项目时,假设另外一个项目的内容发生改变并且push了,但是原项目是感知不到这次提交的,所以我们必须进入到原项目的依赖项目然后通过git pull更新依赖项目(或者在原项目使用`git submodule foreach git pull`命令),但是这次pull只是将本地的依赖项目更新了,原项目的远程依赖还没有更新,此时在<font color="#FF00FF">原项目</font>执行 git add->git commit->git push才能让远程更新.  
+6.  没有命令直接<font color="#00FF00">解除当前项目的关联项目</font>,要删除只有一种办法就是在<font color="#00FF00">当前项目直接删除关联项目然后推送到远程</font>->git add ->git commit ->git push  
+7.  24、25介绍的都是单向依赖,在这种依赖环境下原项目是不能直接修改依赖项目的远程内容的(当然本地的可以修改)也即原项目只能单向看依赖项目,不能修改.<font color="#00FF00">而在互相依赖状态下当前项目修改完依赖项目后可以push到远程,远程的依赖项目就可以被改变</font>.
+8.  Git与SVN的区别:  
     SVN是<font color="#00FF00">集中式版本控制系统</font>,需要联网才能工作必须不停地与服务器进行同步.  
     而Git是<font color="#00FF00">分布式版本控制系统</font>,每个人的电脑都是一个<font color="#FFC800">完整</font>的版本库,工作的时候不需要联网,只要把修改的文件推送给对方即可.
-28. <font color="#FFC800">.gitignore</font>指定跟踪规则,主要看/在前面还是在后面  
+9.  <font color="#FFC800">.gitignore</font>指定跟踪规则,主要看/在前面还是在后面  
     *提示:如果一个文件夹里面没有任何内容则该文件夹默认被屏蔽,而且这个<font color="#00FF00">文件夹无法被添加到暂存区</font>*  
     <font color="#00FF00">temp</font>:取消跟踪当前项目下temp文件及所有temp目录,假设现在项目路径结构如下:  
     > .gitignore  
@@ -433,42 +435,42 @@ B.SourceTree安装教程
     > > a.txt  
     > 
     > temp <font color="#00FF00"># 如果这里temp是文件的话它也会被屏蔽</font>  
-29. Git的当前分支不能删除比自已版本高的分支
+10. Git的当前分支不能删除比自已版本高的分支
     ![不能删除高版本](resources/git/4.png)  
-30. fast-forward流程  
+11. fast-forward流程  
     ![fast-forward](resources/git/5.png)  
     假设分支A处于commit-A在此状态下创建了分支B,接着分支B提交了两次来到了<font color="#FFC800">commit-C</font>状态,此时将分支B合并到分支A,找到分支A和分支B的第一个<font color="#00FF00">同源点(这里是commit-A)</font>,由于分支A在此之后没有任何commit,所以会直接把分支A的<font color="#FF00FF">指针</font>指向<font color="#FFC800">commit-C</font>这次提交  
     <font color="#00FF00">fast-forward最终会归为一点</font>,例如上图中的hash4  
-31. 禁止fast-forward
+12. 禁止fast-forward
     ![no-fast-forward](resources/git/6.png)  
     此时将dev的两个commit合并到master之后,master还会再创建一个commit,即图中的hash5  
-32. 冲突解决流程图  
+13. 冲突解决流程图  
     ![解决冲突](resources/git/7.png)  
-33. 工作区的回滚(各种意义上的)使用的都是`git restore`,而暂存区的回滚(各种意义上的)使用的都是`git restore --staged`  
-34. 版本回滚流程图
+14. 工作区的回滚(各种意义上的)使用的都是`git restore`,而暂存区的回滚(各种意义上的)使用的都是`git restore --staged`  
+15. 版本回滚流程图
     ![版本回滚](resources/git/8.png)
     HEAD可以有多份,<font color="#00FF00">一个HEAD就是一个阵营</font>,比如这里的HEAD1和HEAD2;git log命令本质只能看到<font color="#00FF00">HEAD</font>所在阵营的提交记录,不能看别的阵营  
     <font color="#FF00FF">branchHead只有一份<font color="#00FFFF">(对应每个分支只有一个branchHead,在第39条中读取到的分支hash值就是branchHead对应的hash值,而不是HEAD的hash值)</font></font><font color="#00FF00">,当HEAd切换为某个阵营的</font><font color="#FFC800">最后一次提交</font>时,自动变成这个阵营  
     当HEAD切换到当前阵营的历史版本并产生一个提交时会<font color="#00FF00">创建一个新的阵营</font>,<font color="#FFC800">这个阵营新的提交信息只能跟着HEAD这个老大走</font>  
     可以使用`git checkout`命令使HEAD进入游离状态  
     <font color="#ff9999">只有使用git reset才相当于将当前分支的指针定位到某次commit;git reset相当于回滚到任意版本,该操作比较危险</font>  
-35. 版本穿梭的本质是创建一个看不到的分支,并且该分支的名称就是目标版本的hash值,该分支的版本就是目标版本;
+16. 版本穿梭的本质是创建一个看不到的分支,并且该分支的名称就是目标版本的hash值,该分支的版本就是目标版本;
     在游离状态(版本穿梭后的状态就是游离状态)下<font color="#FFC800">如果对文件进行修改就必须要提交</font>,提交就会产生新的hash,因为版本穿梭是创建新的分支所以本次提交对源分支master是不可见的  
     <font color="#FF00FF">游离状态是创建分支的好时机,版本穿梭就是用于创建分支的</font>  
     如果想退出版本穿梭,只要执行`git switch`切换分支(例如master)即可  
     实际上版本穿梭并不是分支,<font color="#00FF00">游离的本意就是当前不处于任何分支</font>,这里只是便于理解;因为它并不具有分支的一些特征,比如分支重命名  
-36. 本地与远程冲突解决流程图
+17. 本地与远程冲突解决流程图
     ![本地与远程冲突解决流程图](resources/git/12.png)  
     和之前最大的区别在于之前是主动合并的分支的提交在后面,被动合并的分支的提交在前面;这里规定就是:<font color="#FF00FF">当远程分支和本地分支合并产生冲突时,远程分支的提交在后面,本地分支的提交在前面</font>再加一个解决冲突的提交  
     <font color="#00FF00">远程分支的commit提交链一旦确定就不能随意穿插commit记录</font>  
     此时当别的本地分支再合并的远程分支的时候,还是<font color="#FFC800">先找同源点,如果本地分支在同源点之后没有任何提交则触发fast-forward</font>  
-37. 本地和远程合并流程图  
+18. 本地和远程合并流程图  
     <font color="#FF00FF">如果本地的本次push不能使远程分支产生fast-forward,但也不会产生冲突的情况下;分支合并成功后Git会自动额外创建一个commit</font>  
     例如本地的master分支和远程master分支的第一个同源点是<font color="#FF00FF">origin-master</font>,此时本地master产生了一个提交<font color="#00FF00">commit-A</font>;远程的分支被别人push了也产生了一个提交称为<font color="#FFC800">commit-B</font>(并且这两个提交不冲突);此时本地分支push不会报错、不会冲突但也不会产生fast-forward(因为本地和远程找到最新的一个同源点后发现本地还有提交)  
     此时Git的版本链为:<font color="#FF00FF">origin-master</font>-><font color="#FFC800">commit-B</font>-><font color="#00FF00">commit-A</font>-><font color="#FF0000">Merge branch 'master' of xxx</font>  
     commit-B在后面是因为commit-B是先提交的(远程一旦确定不能改变),重要的是Git会自动生成一个新的提交就是这里的<font color="#FF0000">Merge branch 'master' of xxx</font>  
     ![本地和远程合并流程图](resources/git/13.png)  
-38. 分支在Git中的存储方式
+19. 分支在Git中的存储方式
     进入每个Git项目的.git文件夹,这里列举它的文件目录结构  
     * git
       * `COMMIT_EDITMSG`:存放<font color="#00FF00">当前分支</font>的<font color="#FF00FF">branchHead</font>指针指向的commit的提交信息
