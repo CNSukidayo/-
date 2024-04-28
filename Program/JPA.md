@@ -722,8 +722,6 @@ public class SpringDataJPATest {
   查询所有的数据,通过Sort进行排序
 * `findAll(Pageable) return Page<T>`
 
-4.QueryByExampleExecutor  
-详情见2.3 自定义操作=>2.3.3 Query By Example
 
 **通过一个示例来演示该接口的用法**  
 3.1 修改CustomerRepository接口如下  
@@ -782,9 +780,12 @@ args3:哪些字段参与排序
 <font color="#00FF00">一般而言都是结合PageRequest和Sort进行使用的,单独调用findAll(Sort)方法查询所有数据比较少用</font>  
 <font color="#FF00FF">另外推荐使用类型安全的方式构建Sort避免以后数据库字段发生改变</font>  
 
+4.QueryByExampleExecutor  
+详情见2.3 自定义操作=>2.3.3 Query By Example
+
 ### 2.3 自定义操作
 **介绍:**  
-2.2节介绍的repository还是有很多局限性的,如果需要更加灵活的SQL查询就需要自定义擦做
+2.2节介绍的repository还是有很多局限性的,如果需要更加灵活的SQL查询就需要自定义操作
 **目录:**  
 2.3.1 JPQL  
 2.3.2 规定方法名称  
@@ -963,6 +964,9 @@ public interface CustomerSpecificationRepository extends
         JpaSpecificationExecutor<Customer> {
 }
 ```
+
+**提示:**  
+JpaRepository继承了<font color="#00FF00">PagingAndSortingRepository和QueryByExampleExecutor</font>,所以很多情况我们编写的JPA接口,只需要继承<font color="#FF00FF">JpaRepository和JpaSpecificationExecutor</font>这两个接口便能满足大部分的查询条件
 
 2.编写测试类  
 ```java
