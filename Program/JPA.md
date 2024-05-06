@@ -810,7 +810,7 @@ public interface CustomerRepository extends PagingAndSortingRepository<Customer,
      * 而必须指定@Param注解,在该注解中指定该占位符的名称与形参的对应情况
      * 并且必须要加冒号:
      */
-    @Query("from Customer where customerName =: customerName")
+    @Query("from Customer where customerName = :customerName")
     Customer findCustomerByCustomerNameWithName(@Param("customerName") String customerName);
 
     /**
@@ -821,7 +821,7 @@ public interface CustomerRepository extends PagingAndSortingRepository<Customer,
      */
     @Modifying
     @Transactional
-    @Query("update Customer c set c.customerName =: customerName where c.customerId =: customerId")
+    @Query("update Customer c set c.customerName = :customerName where c.customerId = :customerId")
     int updateCustomer(@Param("customerName") String customerName, @Param("customerId") Long customerId);
 
     // 删除操作
@@ -843,7 +843,7 @@ public interface CustomerRepository extends PagingAndSortingRepository<Customer,
     int insertCustomerBySelect(Long id);
 }
 ```
-
+*注意:这里赋值的时候等于号=与字段之间必须有一个空格,例如`c.customerName = :customerName`不能写成c.customerName =: customerName,否则会报错*  
 *JPQL也是支持使用原生SQL的*  
 ```java
 public interface CustomerRepository extends PagingAndSortingRepository<Customer, Long> {
